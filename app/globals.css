@@ -36,6 +36,25 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Price flash animations */
+@keyframes flash-up {
+  0% { background-color: rgba(34, 197, 94, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-down {
+  0% { background-color: rgba(239, 68, 68, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.flash-up {
+  animation: flash-up 0.7s ease-out;
+}
+
+.flash-down {
+  animation: flash-down 0.7s ease-out;
+}
+
 /* Custom scrollbar for main content */
 ::-webkit-scrollbar {
   width: 8px;

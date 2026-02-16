@@ -1,7 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { CoinData } from '../types/market';
+
+type FlashDirection = 'up' | 'down';
+interface FlashState {
+  bithumb?: FlashDirection;
+  upbit?: FlashDirection;
+}
 
 interface MarketTableProps {
   data: CoinData[];
@@ -15,6 +21,72 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [binanceAlphaSymbols, setBinanceAlphaSymbols] = useState<string[]>([]);
   const tableTopRef = useRef<HTMLDivElement>(null);
+  const prevPricesRef = useRef<Map<string, { bithumb: number; upbit: number }>>(new Map());
+  const [flashMap, setFlashMap] = useState<Map<string, FlashState>>(new Map());
+  const flashTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Track price changes and trigger flash effects
+  useEffect(() => {
+    const prevPrices = prevPricesRef.current;
+    const newFlashes = new Map<string, FlashState>();
+
+    data.forEach((coin) => {
+      const prev = prevPrices.get(coin.symbol);
+      const flash: FlashState = {};
+
+      if (prev) {
+        if (coin.bithumb && prev.bithumb !== 0 && coin.bithumb.price !== prev.bithumb) {
+          flash.bithumb = coin.bithumb.price > prev.bithumb ? 'up' : 'down';
+        }
+        if (coin.upbit && prev.upbit !== 0 && coin.upbit.price !== prev.upbit) {
+          flash.upbit = coin.upbit.price > prev.upbit ? 'up' : 'down';
+        }
+      }
+
+      if (flash.bithumb || flash.upbit) {
+        newFlashes.set(coin.symbol, flash);
+      }
+
+      // Update prev prices
+      prevPrices.set(coin.symbol, {
+        bithumb: coin.bithumb?.price ?? 0,
+        upbit: coin.upbit?.price ?? 0,
+      });
+    });
+
+    if (newFlashes.size > 0) {
+      setFlashMap(prev => {
+        const merged = new Map(prev);
+        newFlashes.forEach((v, k) => merged.set(k, v));
+        return merged;
+      });
+
+      // Clear flashes after animation
+      newFlashes.forEach((_, symbol) => {
+        const existing = flashTimersRef.current.get(symbol);
+        if (existing) clearTimeout(existing);
+
+        const timer = setTimeout(() => {
+          setFlashMap(prev => {
+            const next = new Map(prev);
+            next.delete(symbol);
+            return next;
+          });
+          flashTimersRef.current.delete(symbol);
+        }, 700);
+        flashTimersRef.current.set(symbol, timer);
+      });
+    }
+  }, [data]);
+
+  const getFlashClass = useCallback((symbol: string, exchange: 'bithumb' | 'upbit') => {
+    const flash = flashMap.get(symbol);
+    if (!flash) return '';
+    const dir = flash[exchange];
+    if (dir === 'up') return 'flash-up';
+    if (dir === 'down') return 'flash-down';
+    return '';
+  }, [flashMap]);
 
   // Filter data based on search query
   const filteredData = searchQuery
@@ -275,14 +347,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                         </div>
                       </td>
                       {/* Bithumb */}
-                      <td className="text-right p-4 border-l border-zinc-800/50">
+                      <td className={`text-right p-4 border-l border-zinc-800/50 ${getFlashClass(coin.symbol, 'bithumb')}`}>
                         {coin.bithumb ? (
                           <div className="text-sm text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
                         ) : (
                           <div className="text-xs text-zinc-600">-</div>
                         )}
                       </td>
-                      <td className="text-right p-4">
+                      <td className={`text-right p-4 ${getFlashClass(coin.symbol, 'bithumb')}`}>
                         {coin.bithumb ? (
                           <div className={`text-sm font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {formatChangeRate(coin.bithumb.changeRate)}
@@ -299,14 +371,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                         )}
                       </td>
                       {/* Upbit */}
-                      <td className="text-right p-4 border-l border-zinc-800/50">
+                      <td className={`text-right p-4 border-l border-zinc-800/50 ${getFlashClass(coin.symbol, 'upbit')}`}>
                         {coin.upbit ? (
                           <div className="text-sm text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
                         ) : (
                           <div className="text-xs text-zinc-600">-</div>
                         )}
                       </td>
-                      <td className="text-right p-4">
+                      <td className={`text-right p-4 ${getFlashClass(coin.symbol, 'upbit')}`}>
                         {coin.upbit ? (
                           <div className={`text-sm font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {formatChangeRate(coin.upbit.changeRate)}
@@ -356,7 +428,7 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                         </div>
                       </td>
                       {/* Bithumb */}
-                      <td className="text-right p-1.5">
+                      <td className={`text-right p-1.5 ${getFlashClass(coin.symbol, 'bithumb')}`}>
                         {coin.bithumb ? (
                           <>
                             <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
@@ -378,7 +450,7 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                         )}
                       </td>
                       {/* Upbit */}
-                      <td className="text-right p-1.5">
+                      <td className={`text-right p-1.5 ${getFlashClass(coin.symbol, 'upbit')}`}>
                         {coin.upbit ? (
                           <>
                             <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>

@@ -3,16 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "rewrites": [
-    {
-      "source": "/api/funding",
-      "destination": "/api/funding"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "https://anopisthographically-ungambling-lashanda.ngrok-free.dev/api/:path*"
-    }
-  ],
   "env": {
     "NEXT_PUBLIC_API_URL": "https://anopisthographically-ungambling-lashanda.ngrok-free.dev"
   }
