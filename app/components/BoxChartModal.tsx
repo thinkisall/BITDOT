@@ -90,34 +90,34 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
         // 캔들 데이터 설정
         candlestickSeries.setData(data.candles);
 
-        // 50SMA 라인 (노란색)
+        // 50SMA 라인 (빨간색)
         const sma50Series = chart.addLineSeries({
-          color: '#eab308',
+          color: '#ef4444',
           lineWidth: 2,
           title: 'MA50',
         });
         sma50Series.setData(data.sma50);
 
-        // 110SMA 라인 (빨간색)
+        // 110SMA 라인 (주황색)
         const sma110Series = chart.addLineSeries({
-          color: '#ef4444',
+          color: '#f97316',
           lineWidth: 2,
           title: 'MA110',
         });
         sma110Series.setData(data.sma110);
 
-        // 180SMA 라인 (주황색)
+        // 180SMA 라인 (노란색)
         const sma180Series = chart.addLineSeries({
-          color: '#f97316',
+          color: '#eab308',
           lineWidth: 2,
           title: 'MA180',
         });
         sma180Series.setData(data.sma180);
 
-        // 박스 상단 라인
+        // 박스 상단 라인 (두꺼운 선)
         const topLineSeries = chart.addLineSeries({
           color: '#3b82f6',
-          lineWidth: 2,
+          lineWidth: 4,
           lineStyle: 2, // dashed
           title: '박스 상단',
         });
@@ -125,10 +125,10 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
           data.candles.map((c: any) => ({ time: c.time, value: boxData.top }))
         );
 
-        // 박스 하단 라인
+        // 박스 하단 라인 (두꺼운 선)
         const bottomLineSeries = chart.addLineSeries({
           color: '#a855f7',
-          lineWidth: 2,
+          lineWidth: 4,
           lineStyle: 2, // dashed
           title: '박스 하단',
         });
@@ -211,8 +211,8 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
         <div className="p-4 border-t border-zinc-800 bg-zinc-900/50">
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <div className="text-zinc-500 mb-1">50SMA</div>
-              <div className="text-yellow-500 font-medium">₩{boxData.sma50.toLocaleString()}</div>
+              <div className="text-zinc-500 mb-1">50SMA (빨)</div>
+              <div className="text-red-500 font-medium">₩{boxData.sma50.toLocaleString()}</div>
             </div>
             <div>
               <div className="text-zinc-500 mb-1">박스 상단</div>

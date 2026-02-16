@@ -12,9 +12,44 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.damoabom.com';
+
 export const metadata: Metadata = {
-  title: "BITDOT - 암호화폐 거래소",
-  description: "안전하고 빠른 암호화폐 거래소",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'BITDAMOABOM - 암호화폐 거래소 시세 비교',
+    template: '%s | BITDAMOABOM'
+  },
+  description: '업비트와 빗썸의 실시간 암호화폐 시세를 비교하고 박스권 스캐너로 거래 기회를 찾아보세요.',
+  keywords: ['암호화폐', '비트코인', '거래소', '시세 비교', '업비트', '빗썸', '박스권', '스캐너'],
+  authors: [{ name: 'BITDAMOABOM' }],
+  alternates: {
+    canonical: siteUrl,
+    types: {
+      'application/rss+xml': `${siteUrl}/rss.xml`,
+    },
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'ko_KR',
+    url: siteUrl,
+    siteName: 'BITDAMOABOM',
+    title: 'BITDAMOABOM - 암호화폐 거래소 시세 비교',
+    description: '업비트와 빗썸의 실시간 암호화폐 시세를 비교하고 박스권 스캐너로 거래 기회를 찾아보세요.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BITDAMOABOM - 암호화폐 거래소 시세 비교',
+    description: '업비트와 빗썸의 실시간 암호화폐 시세를 비교하고 박스권 스캐너로 거래 기회를 찾아보세요.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
 };
 
 export default function RootLayout({
