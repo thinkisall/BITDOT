@@ -18,9 +18,13 @@ interface BoxChartModalProps {
 export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxData }: BoxChartModalProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
+  const isCreatingChart = useRef(false);
 
   useEffect(() => {
     if (!isOpen || !chartContainerRef.current) return;
+
+    // 이미 차트 생성 중이면 중단
+    if (isCreatingChart.current) return;
 
     // 기존 차트 정리
     if (chartRef.current) {
@@ -28,9 +32,15 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
       chartRef.current = null;
     }
 
+    // 컨테이너 비우기 (중복 방지)
+    if (chartContainerRef.current) {
+      chartContainerRef.current.innerHTML = '';
+    }
+
     let resizeObserver: ResizeObserver | null = null;
 
     const fetchAndDisplayChart = async () => {
+      isCreatingChart.current = true;
       try {
         // API에서 캔들 데이터 가져오기
         const response = await fetch(`/api/chart?symbol=${symbol}&exchange=${exchange}`);
@@ -41,12 +51,15 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
           return;
         }
 
+        // 차트 컨테이너가 여전히 존재하는지 확인
+        if (!chartContainerRef.current) return;
+
         // 차트 생성
-        const chart = createChart(chartContainerRef.current!, {
+        const chart = createChart(chartContainerRef.current, {
           width: chartContainerRef.current!.clientWidth,
           height: 500,
           layout: {
-            backgroundColor: '#18181b',
+            background: { color: '#18181b' },
             textColor: '#a1a1aa',
           },
           grid: {
@@ -127,23 +140,28 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
         chart.timeScale().fitContent();
 
         // ResizeObserver로 리사이즈 처리
-        resizeObserver = new ResizeObserver(entries => {
-          if (entries.length === 0 || entries[0].target !== chartContainerRef.current) {
-            return;
-          }
-          const newRect = entries[0].contentRect;
-          chart.applyOptions({ width: newRect.width });
-        });
+        if (chartContainerRef.current) {
+          resizeObserver = new ResizeObserver(entries => {
+            if (entries.length === 0 || entries[0].target !== chartContainerRef.current) {
+              return;
+            }
+            const newRect = entries[0].contentRect;
+            chart.applyOptions({ width: newRect.width });
+          });
 
-        resizeObserver.observe(chartContainerRef.current!);
+          resizeObserver.observe(chartContainerRef.current);
+        }
       } catch (error) {
         console.error('Chart error:', error);
+      } finally {
+        isCreatingChart.current = false;
       }
     };
 
     fetchAndDisplayChart();
 
     return () => {
+      isCreatingChart.current = false;
       if (resizeObserver) {
         resizeObserver.disconnect();
       }

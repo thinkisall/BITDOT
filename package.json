@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "server": "node start-server.js",
+    "ngrok": "node ngrok-tunnel.js",
+    "dev:ngrok": "USE_NGROK=true node start-server.js"
   },
   "dependencies": {
     "lightweight-charts": "^4.2.0",

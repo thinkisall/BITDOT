@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { CoinData } from '../types/market';
 
 interface MarketTableProps {
@@ -178,139 +178,206 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
       </div>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px]">
-            <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 sticky left-0 bg-zinc-900/95 backdrop-blur z-10" rowSpan={2}>
-                  순위
-                </th>
-                <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 sticky left-10 sm:left-16 bg-zinc-900/95 backdrop-blur z-10" rowSpan={2}>
-                  코인
-                </th>
-                <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 border-l border-zinc-800" colSpan={3}>
-                  <div className="flex items-center justify-center gap-1 sm:gap-2">
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500"></div>
-                    <span className="hidden sm:inline">빗썸</span>
-                    <span className="sm:hidden">빗썸</span>
-                  </div>
-                </th>
-                <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 border-l border-zinc-800" colSpan={3}>
-                  <div className="flex items-center justify-center gap-1 sm:gap-2">
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-500"></div>
-                    <span className="hidden sm:inline">업비트</span>
-                    <span className="sm:hidden">업비트</span>
-                  </div>
-                </th>
-                <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 border-l border-zinc-800" rowSpan={2}>
-                  차액
-                </th>
-              </tr>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 border-l border-zinc-800">현재가</th>
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">변동률</th>
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">거래량</th>
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 border-l border-zinc-800">현재가</th>
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">변동률</th>
-                <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">거래량</th>
-              </tr>
-            </thead>
+        <table className="w-full">
+          <thead>
+            {/* Desktop Header */}
+            <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
+              <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>순위</th>
+              <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>코인</th>
+              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  빗썸
+                </div>
+              </th>
+              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                  업비트
+                </div>
+              </th>
+              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" rowSpan={2}>차액</th>
+            </tr>
+            <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
+              <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
+              <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
+              <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
+              <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
+              <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
+              <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
+            </tr>
+
+            {/* Mobile Header */}
+            <tr className="border-b border-zinc-800 bg-zinc-900/50 sm:hidden">
+              <th className="text-left text-[9px] text-zinc-500 font-medium p-1.5">코인</th>
+              <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
+                <div className="flex items-center justify-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  빗썸
+                </div>
+              </th>
+              <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
+                <div className="flex items-center justify-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                  업비트
+                </div>
+              </th>
+            </tr>
+          </thead>
             <tbody>
               {currentData.length > 0 ? (
                 currentData.map((coin) => (
-                  <tr key={coin.symbol} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
-                    <td className="p-2 sm:p-4 sticky left-0 bg-zinc-900/95 backdrop-blur">
-                      <div className="text-[10px] sm:text-sm font-medium text-zinc-400">#{getRank(coin)}</div>
-                    </td>
-                  <td className="p-2 sm:p-4 sticky left-10 sm:left-16 bg-zinc-900/95 backdrop-blur">
-                    <div className="flex items-center gap-1.5 sm:gap-3">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[9px] sm:text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
-                      </div>
-                      <div>
-                        <div className="text-[11px] sm:text-sm font-medium text-white">
-                          {coin.name}
+                  <Fragment key={coin.symbol}>
+                    {/* Desktop Row */}
+                    <tr key={`${coin.symbol}-desktop`} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors hidden sm:table-row">
+                      <td className="p-4">
+                        <div className="text-sm font-medium text-zinc-400">#{getRank(coin)}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                            <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-white">{coin.name}</div>
+                            <div className="text-xs text-zinc-500">{coin.symbol}</div>
+                          </div>
                         </div>
-                        <div className="text-[9px] sm:text-xs text-zinc-500">{coin.symbol}</div>
-                      </div>
-                    </div>
-                  </td>
-                  {/* Bithumb */}
-                  <td className="text-right p-2 sm:p-4 border-l border-zinc-800/50">
-                    {coin.bithumb ? (
-                      <div className="text-[10px] sm:text-sm text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  <td className="text-right p-2 sm:p-4">
-                    {coin.bithumb ? (
-                      <div className={`text-[10px] sm:text-sm font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {formatChangeRate(coin.bithumb.changeRate)}
-                      </div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  <td className="text-right p-2 sm:p-4">
-                    {coin.bithumb ? (
-                      <div className="text-[9px] sm:text-xs text-zinc-400">{formatVolume(coin.bithumb.volume)}</div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  {/* Upbit */}
-                  <td className="text-right p-2 sm:p-4 border-l border-zinc-800/50">
-                    {coin.upbit ? (
-                      <div className="text-[10px] sm:text-sm text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  <td className="text-right p-2 sm:p-4">
-                    {coin.upbit ? (
-                      <div className={`text-[10px] sm:text-sm font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {formatChangeRate(coin.upbit.changeRate)}
-                      </div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  <td className="text-right p-2 sm:p-4">
-                    {coin.upbit ? (
-                      <div className="text-[9px] sm:text-xs text-zinc-400">{formatVolume(coin.upbit.volume)}</div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                  {/* Price Difference */}
-                  <td className="text-right p-2 sm:p-4 border-l border-zinc-800/50">
-                    {coin.bithumb && coin.upbit ? (
-                      <div className={`text-[10px] sm:text-sm font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-                        {formatPriceDiff(coin.priceDiff)}
-                      </div>
-                    ) : (
-                      <div className="text-[9px] sm:text-xs text-zinc-600">-</div>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      </td>
+                      {/* Bithumb */}
+                      <td className="text-right p-4 border-l border-zinc-800/50">
+                        {coin.bithumb ? (
+                          <div className="text-sm text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-right p-4">
+                        {coin.bithumb ? (
+                          <div className={`text-sm font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {formatChangeRate(coin.bithumb.changeRate)}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-right p-4">
+                        {coin.bithumb ? (
+                          <div className="text-xs text-zinc-400">{formatVolume(coin.bithumb.volume)}</div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      {/* Upbit */}
+                      <td className="text-right p-4 border-l border-zinc-800/50">
+                        {coin.upbit ? (
+                          <div className="text-sm text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-right p-4">
+                        {coin.upbit ? (
+                          <div className={`text-sm font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {formatChangeRate(coin.upbit.changeRate)}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-right p-4">
+                        {coin.upbit ? (
+                          <div className="text-xs text-zinc-400">{formatVolume(coin.upbit.volume)}</div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                      {/* Price Difference */}
+                      <td className="text-right p-4 border-l border-zinc-800/50">
+                        {coin.bithumb && coin.upbit ? (
+                          <div className={`text-sm font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                            {formatPriceDiff(coin.priceDiff)}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-600">-</div>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* Mobile Row */}
+                    <tr key={`${coin.symbol}-mobile`} className="border-b border-zinc-800 sm:hidden">
+                      {/* Coin Info */}
+                      <td className="p-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                            <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+                            <div className="text-[8px] text-zinc-500">#{getRank(coin)}</div>
+                          </div>
+                        </div>
+                      </td>
+                      {/* Bithumb */}
+                      <td className="text-right p-1.5">
+                        {coin.bithumb ? (
+                          <>
+                            <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
+                            <div className={`text-[9px] font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {formatChangeRate(coin.bithumb.changeRate)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[8px] text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-center p-1.5">
+                        {coin.bithumb && coin.upbit ? (
+                          <div className={`text-[9px] font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                            {coin.priceDiff >= 0 ? '+' : ''}{Math.round(coin.priceDiff)}
+                          </div>
+                        ) : (
+                          <div className="text-[8px] text-zinc-600">-</div>
+                        )}
+                      </td>
+                      {/* Upbit */}
+                      <td className="text-right p-1.5">
+                        {coin.upbit ? (
+                          <>
+                            <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
+                            <div className={`text-[9px] font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {formatChangeRate(coin.upbit.changeRate)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[8px] text-zinc-600">-</div>
+                        )}
+                      </td>
+                      <td className="text-right p-1.5">
+                        {coin.upbit ? (
+                          <div className="text-[9px] text-zinc-400">{formatVolume(coin.upbit.volume)}</div>
+                        ) : (
+                          <div className="text-[8px] text-zinc-600">-</div>
+                        )}
+                      </td>
+                    </tr>
+                  </Fragment>
+                ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center">
+                  <td colSpan={9} className="p-6 sm:p-8 text-center">
                     <div className="text-zinc-500">
-                      <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
-                      <p className="text-sm">검색 결과가 없습니다</p>
-                      <p className="text-xs mt-1">다른 검색어를 입력해보세요</p>
+                      <p className="text-xs sm:text-sm">검색 결과가 없습니다</p>
+                      <p className="text-[10px] sm:text-xs mt-1">다른 검색어를 입력해보세요</p>
                     </div>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
       </div>
 
       {/* Pagination */}
