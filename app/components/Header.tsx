@@ -32,12 +32,6 @@ export default function Header() {
               홈
             </Link>
             <Link
-              href="/scanner"
-              className={`transition-colors ${pathname === "/scanner" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-            >
-              스캐너
-            </Link>
-            <Link
               href="/analysis"
               className={`transition-colors ${pathname === "/analysis" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
             >
@@ -48,6 +42,12 @@ export default function Header() {
               className={`transition-colors ${pathname?.startsWith("/board") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
             >
               게시판
+            </Link>
+            <Link
+              href="/premium"
+              className={`transition-colors ${pathname === "/premium" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+            >
+              프리미엄
             </Link>
             {isAdmin && (
               <Link

@@ -16,6 +16,17 @@ interface UserData {
   updated_at: string;
 }
 
+interface PremiumRequestData {
+  id: string;
+  uid: string;
+  email: string;
+  display_name: string | null;
+  depositor_name: string;
+  amount: number;
+  status: string;
+  created_at: string;
+}
+
 // 관리자 이메일 목록 (클라이언트 체크용)
 const ADMIN_EMAILS = ['thinkisall@gmail.com', 'bitdamoabom@gmail.com'];
 
@@ -27,6 +38,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [premiumDays, setPremiumDays] = useState<number>(30);
+  const [activeTab, setActiveTab] = useState<'users' | 'premium-requests'>('users');
+  const [premiumRequests, setPremiumRequests] = useState<PremiumRequestData[]>([]);
+  const [processingRequest, setProcessingRequest] = useState<string | null>(null);
 
   const isAdmin = user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -38,9 +52,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchUsers();
+      if (activeTab === 'users') {
+        fetchUsers();
+      } else if (activeTab === 'premium-requests') {
+        fetchPremiumRequests();
+      }
     }
-  }, [isAdmin]);
+  }, [isAdmin, activeTab]);
 
   const fetchUsers = async () => {
     try {
@@ -105,6 +123,74 @@ export default function AdminPage() {
     return new Date(dateString).toLocaleString('ko-KR');
   };
 
+  const fetchPremiumRequests = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/admin/premium-requests', {
+        headers: {
+          'x-user-email': user?.email || '',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch premium requests');
+      }
+
+      const data = await response.json();
+      setPremiumRequests(data.requests || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProcessRequest = async (
+    requestId: string,
+    action: 'approve' | 'reject',
+    rejectReason?: string
+  ) => {
+    const confirmMessage = action === 'approve'
+      ? '프리미엄을 승인하시겠습니까? (30일 권한 부여)'
+      : '신청을 거부하시겠습니까?';
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      setProcessingRequest(requestId);
+
+      const response = await fetch('/api/admin/premium-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user?.email || '',
+        },
+        body: JSON.stringify({
+          requestId,
+          action,
+          rejectReason,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process request');
+      }
+
+      alert(data.message);
+      await fetchPremiumRequests(); // 목록 새로고침
+
+      if (action === 'approve') {
+        await fetchUsers(); // 유저 목록도 새로고침
+      }
+    } catch (err: any) {
+      alert('처리 실패: ' + err.message);
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
   if (loading || !isAdmin) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -125,13 +211,46 @@ export default function AdminPage() {
           </p>
         </div>
 
+        {/* 탭 메뉴 */}
+        <div className="mb-6">
+          <div className="flex gap-2 border-b border-zinc-800">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'users'
+                  ? 'text-yellow-500 border-b-2 border-yellow-500'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              유저 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('premium-requests')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'premium-requests'
+                  ? 'text-yellow-500 border-b-2 border-yellow-500'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              프리미엄 신청 관리
+              {premiumRequests.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-yellow-500 text-zinc-950 text-xs rounded-full font-bold">
+                  {premiumRequests.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
             <p className="text-sm text-red-500">{error}</p>
           </div>
         )}
 
-        <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+        {/* 유저 관리 탭 */}
+        {activeTab === 'users' && (
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
           <div className="p-4 border-b border-zinc-800">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">전체 유저</h2>
@@ -265,6 +384,99 @@ export default function AdminPage() {
             )}
           </div>
         </div>
+        )}
+
+        {/* 프리미엄 신청 관리 탭 */}
+        {activeTab === 'premium-requests' && (
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+            <div className="p-4 border-b border-zinc-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">프리미엄 신청 목록</h2>
+                <button
+                  onClick={fetchPremiumRequests}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? '로딩 중...' : '새로고침'}
+                </button>
+              </div>
+              <p className="text-sm text-zinc-400 mt-1">
+                승인 대기 중인 신청: {premiumRequests.length}건
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/50">
+                    <th className="text-left text-xs text-zinc-500 font-medium p-4">신청일</th>
+                    <th className="text-left text-xs text-zinc-500 font-medium p-4">신청자</th>
+                    <th className="text-left text-xs text-zinc-500 font-medium p-4">입금자명</th>
+                    <th className="text-center text-xs text-zinc-500 font-medium p-4">금액</th>
+                    <th className="text-center text-xs text-zinc-500 font-medium p-4">처리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {premiumRequests.map((request) => (
+                    <tr
+                      key={request.id}
+                      className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <td className="p-4">
+                        <div className="text-sm text-white">
+                          {formatDate(request.created_at)}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-white">{request.email}</div>
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          {request.display_name || '-'}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-yellow-500 font-medium">
+                          {request.depositor_name}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="text-sm text-white">
+                          {request.amount.toLocaleString()}원
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleProcessRequest(request.id, 'approve')}
+                            disabled={processingRequest === request.id}
+                            className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded transition-colors disabled:opacity-50"
+                          >
+                            승인
+                          </button>
+                          <button
+                            onClick={() => {
+                              const reason = prompt('거부 사유를 입력하세요 (선택사항):');
+                              handleProcessRequest(request.id, 'reject', reason || undefined);
+                            }}
+                            disabled={processingRequest === request.id}
+                            className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded transition-colors disabled:opacity-50"
+                          >
+                            거부
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {premiumRequests.length === 0 && !isLoading && (
+                <div className="p-8 text-center">
+                  <p className="text-sm text-zinc-500">대기 중인 신청이 없습니다</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 사용 안내 */}
         <div className="mt-6 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
