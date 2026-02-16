@@ -38,6 +38,14 @@ interface TimeframeBoxInfo {
   positionPercent?: number; // 박스권 내 위치 퍼센트 (0-100)
 }
 
+interface VolumeSpike {
+  time: number; // timestamp (ms)
+  timeAgo: string; // "3시간 전", "1일 전" 등
+  volume: number;
+  avgVolume: number;
+  ratio: number; // 평균 대비 배수
+}
+
 interface MultiTimeframeResult {
   symbol: string;
   exchange: 'upbit' | 'bithumb';
@@ -51,6 +59,54 @@ interface MultiTimeframeResult {
   };
   boxCount: number; // 박스권 형성된 시간대 개수
   allTimeframes: boolean; // 모든 시간대에서 박스권 형성
+  volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
+}
+
+// 거래량 급증 탐지 함수 (1시간봉 기준)
+function detectVolumeSpike(candles: any[], threshold: number = 20): VolumeSpike | undefined {
+  if (candles.length < 21) return undefined; // 최소 21개 필요 (20개 평균 + 1개 비교)
+
+  // 최근 50개 캔들 확인 (최대 50시간 전까지)
+  const recentCandles = candles.slice(-50);
+
+  for (let i = recentCandles.length - 1; i >= 20; i--) {
+    const currentCandle = recentCandles[i];
+    // 이전 20개 캔들의 평균 거래량
+    const previousCandles = recentCandles.slice(i - 20, i);
+    const avgVolume = previousCandles.reduce((sum, c) => sum + c.volume, 0) / 20;
+
+    if (avgVolume > 0) {
+      const ratio = currentCandle.volume / avgVolume;
+
+      // 20배 이상 급증
+      if (ratio >= threshold) {
+        const now = Date.now();
+        const spikeTime = currentCandle.t;
+        const hoursAgo = Math.floor((now - spikeTime) / (1000 * 60 * 60));
+
+        let timeAgo: string;
+        if (hoursAgo < 1) {
+          const minutesAgo = Math.floor((now - spikeTime) / (1000 * 60));
+          timeAgo = `${minutesAgo}분 전`;
+        } else if (hoursAgo < 24) {
+          timeAgo = `${hoursAgo}시간 전`;
+        } else {
+          const daysAgo = Math.floor(hoursAgo / 24);
+          timeAgo = `${daysAgo}일 전`;
+        }
+
+        return {
+          time: spikeTime,
+          timeAgo,
+          volume: currentCandle.volume,
+          avgVolume,
+          ratio: Math.round(ratio * 10) / 10, // 소수점 1자리
+        };
+      }
+    }
+  }
+
+  return undefined;
 }
 
 // 실제 분석 수행 함수
@@ -145,6 +201,9 @@ async function performAnalysis() {
 
           const currentPrice = candles1h[candles1h.length - 1].close;
 
+          // 1시간봉 거래량 급증 탐지
+          const volumeSpike = detectVolumeSpike(candles1h, 20);
+
           // 가격 위치 계산 함수
           const calculatePosition = (price: number, top: number, bottom: number) => {
             const boxHeight = top - bottom;
@@ -225,6 +284,7 @@ async function performAnalysis() {
             timeframes,
             boxCount,
             allTimeframes,
+            volumeSpike,
           };
         } catch (e: any) {
           console.error(`Error analyzing ${item.symbol} (${item.exchange}):`, e.message);

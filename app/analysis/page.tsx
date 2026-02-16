@@ -16,6 +16,14 @@ interface TimeframeBoxInfo {
   positionPercent?: number;
 }
 
+interface VolumeSpike {
+  time: number;
+  timeAgo: string;
+  volume: number;
+  avgVolume: number;
+  ratio: number;
+}
+
 interface MultiTimeframeResult {
   symbol: string;
   exchange: 'upbit' | 'bithumb';
@@ -29,6 +37,7 @@ interface MultiTimeframeResult {
   };
   boxCount: number;
   allTimeframes: boolean;
+  volumeSpike?: VolumeSpike;
 }
 
 interface AnalysisResponse {
@@ -547,6 +556,14 @@ export default function AnalysisPage() {
                                 {result.boxCount === 3 && (
                                   <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold whitespace-nowrap">
                                     3개
+                                  </span>
+                                )}
+                                {result.volumeSpike && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold whitespace-nowrap"
+                                    title={`${result.volumeSpike.ratio}배 급증 (${result.volumeSpike.timeAgo})`}
+                                  >
+                                    🔥 {result.volumeSpike.timeAgo}
                                   </span>
                                 )}
                               </div>
