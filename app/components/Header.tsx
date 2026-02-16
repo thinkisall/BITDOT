@@ -46,6 +46,12 @@ export default function Header() {
             분석
           </Link>
           <Link
+            href="/funding"
+            className={`whitespace-nowrap transition-colors ${pathname === "/funding" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            펀딩비
+          </Link>
+          <Link
             href="/board"
             className={`whitespace-nowrap transition-colors ${pathname?.startsWith("/board") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -139,6 +145,17 @@ export default function Header() {
                 }`}
               >
                 분석
+              </Link>
+              <Link
+                href="/funding"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/funding"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                펀딩비
               </Link>
               <Link
                 href="/board"

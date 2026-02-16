@@ -1,0 +1,21 @@
+{
+  "name": "BITDAMOABOM - 암호화폐 거래소 시세 비교",
+  "short_name": "BITDAMOABOM",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#eab308",
+  "background_color": "#09090b",
+  "display": "standalone",
+  "start_url": "/",
+  "description": "업비트와 빗썸의 실시간 암호화폐 시세를 비교하고 박스권 스캐너로 거래 기회를 찾아보세요."
+}

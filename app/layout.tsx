@@ -24,6 +24,21 @@ export const metadata: Metadata = {
   description: '업비트와 빗썸의 실시간 암호화폐 시세를 비교하고 박스권 스캐너로 거래 기회를 찾아보세요.',
   keywords: ['암호화폐', '비트코인', '거래소', '시세 비교', '업비트', '빗썸', '박스권', '스캐너'],
   authors: [{ name: 'BITDAMOABOM' }],
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    other: [
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  manifest: '/site.webmanifest',
   alternates: {
     canonical: siteUrl,
     types: {
