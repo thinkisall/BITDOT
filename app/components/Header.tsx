@@ -29,6 +29,12 @@ export default function Header() {
             >
               스캐너
             </Link>
+            <Link
+              href="/board"
+              className={`transition-colors ${pathname?.startsWith("/board") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+            >
+              게시판
+            </Link>
           </nav>
         </div>
         <AuthButton />
