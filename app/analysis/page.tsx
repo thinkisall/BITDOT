@@ -1,0 +1,614 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import Header from '../components/Header';
+import MultiTimeframeChartModal from '../components/MultiTimeframeChartModal';
+
+interface TimeframeBoxInfo {
+  hasBox: boolean;
+  top?: number;
+  bottom?: number;
+  score?: number;
+  type?: string;
+  position?: 'breakout' | 'top' | 'middle' | 'bottom' | 'below';
+  positionPercent?: number;
+}
+
+interface MultiTimeframeResult {
+  symbol: string;
+  exchange: 'upbit' | 'bithumb';
+  volume: number;
+  currentPrice: number;
+  timeframes: {
+    '30m': TimeframeBoxInfo;
+    '1h': TimeframeBoxInfo;
+    '4h': TimeframeBoxInfo;
+    '1d': TimeframeBoxInfo;
+  };
+  boxCount: number;
+  allTimeframes: boolean;
+}
+
+interface AnalysisResponse {
+  results: MultiTimeframeResult[];
+  totalAnalyzed: number;
+  foundCount: number;
+  cached?: boolean;
+  stale?: boolean;
+  cacheAge?: number; // 초 단위
+  lastUpdated?: number;
+}
+
+export default function AnalysisPage() {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [results, setResults] = useState<AnalysisResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCoin, setSelectedCoin] = useState<MultiTimeframeResult | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  const ITEMS_PER_PAGE = 20;
+
+  // 검색어 변경 시 페이지 초기화
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // 자동 갱신 (stale 상태일 때 10초마다 폴링)
+  useEffect(() => {
+    if (!results?.stale) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/multi-timeframe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          const data: AnalysisResponse = await response.json();
+          // stale이 아니면 업데이트 완료
+          if (!data.stale) {
+            setResults(data);
+          }
+        }
+      } catch (e) {
+        console.error('Auto-refresh failed:', e);
+      }
+    }, 10000); // 10초마다
+
+    return () => clearInterval(interval);
+  }, [results?.stale]);
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setError(null);
+    setResults(null);
+
+    try {
+      const response = await fetch('/api/multi-timeframe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data: AnalysisResponse = await response.json();
+      setResults(data);
+    } catch (e: any) {
+      setError(e?.message || '분석 중 오류가 발생했습니다');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const formatNumber = (num: number, decimals = 0) => {
+    return num.toFixed(decimals);
+  };
+
+  const formatVolume = (volume: number) => {
+    if (volume >= 1000000000) {
+      return `${(volume / 1000000000).toFixed(2)}B`;
+    } else if (volume >= 1000000) {
+      return `${(volume / 1000000).toFixed(2)}M`;
+    } else if (volume >= 1000) {
+      return `${(volume / 1000).toFixed(2)}K`;
+    }
+    return volume.toFixed(2);
+  };
+
+  const formatCacheAge = (seconds: number) => {
+    if (seconds < 60) return `${seconds}초 전`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}분 전`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}시간 ${minutes % 60}분 전`;
+  };
+
+  const getTimeframeColor = (tf: TimeframeBoxInfo) => {
+    if (!tf.hasBox) return 'bg-zinc-800 text-zinc-500';
+    return 'bg-green-500/20 text-green-400 border border-green-500/30';
+  };
+
+  const getTimeframeIcon = (tf: TimeframeBoxInfo) => {
+    if (!tf.hasBox) return '✗';
+    return '✓';
+  };
+
+  const getPositionLabel = (position?: string) => {
+    switch (position) {
+      case 'breakout': return '돌파';
+      case 'top': return '상단';
+      case 'middle': return '중단';
+      case 'bottom': return '하단';
+      case 'below': return '이탈';
+      default: return '-';
+    }
+  };
+
+  const getPositionColor = (position?: string) => {
+    switch (position) {
+      case 'breakout': return 'text-red-400 bg-red-500/20';
+      case 'top': return 'text-orange-400 bg-orange-500/20';
+      case 'middle': return 'text-yellow-400 bg-yellow-500/20';
+      case 'bottom': return 'text-green-400 bg-green-500/20';
+      case 'below': return 'text-blue-400 bg-blue-500/20';
+      default: return 'text-zinc-500 bg-zinc-800';
+    }
+  };
+
+  // 검색 필터링
+  const filteredResults = results?.results.filter(result =>
+    result.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentPageResults = filteredResults.slice(startIndex, endIndex);
+
+  // 페이지 변경 및 스크롤
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // 결과 목록 최상단으로 스크롤
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // 페이지 버튼 생성 (최대 5개 표시)
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxButtons = 5;
+
+    if (totalPages <= maxButtons) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push(-1); // ... 표시용
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push(-1);
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push(-1);
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push(-1);
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950">
+      <Header />
+
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {/* Header Section */}
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-lg sm:text-2xl font-bold text-white mb-1 sm:mb-2">
+            멀티 타임프레임 분석
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-400">
+            30분봉, 1시간봉, 4시간봉, 일봉에서 박스권을 동시에 확인합니다
+          </p>
+        </div>
+
+        {/* Analysis Settings Card */}
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">분석 설정</h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+            <div className="bg-zinc-800/50 rounded-lg p-2 sm:p-4">
+              <div className="text-[10px] sm:text-xs text-zinc-500 mb-0.5 sm:mb-1">대상</div>
+              <div className="text-base sm:text-xl font-bold text-white">전체</div>
+              <div className="text-[9px] sm:text-xs text-zinc-400 mt-0.5 sm:mt-1">종목</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-2 sm:p-4">
+              <div className="text-[10px] sm:text-xs text-zinc-500 mb-0.5 sm:mb-1">시간대</div>
+              <div className="text-base sm:text-xl font-bold text-white">4</div>
+              <div className="text-[9px] sm:text-xs text-zinc-400 mt-0.5 sm:mt-1">개</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-2 sm:p-4">
+              <div className="text-[10px] sm:text-xs text-zinc-500 mb-0.5 sm:mb-1">30분</div>
+              <div className="text-base sm:text-xl font-bold text-yellow-500">✓</div>
+              <div className="text-[9px] sm:text-xs text-zinc-400 mt-0.5 sm:mt-1">분석</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-2 sm:p-4">
+              <div className="text-[10px] sm:text-xs text-zinc-500 mb-0.5 sm:mb-1">기타</div>
+              <div className="text-base sm:text-xl font-bold text-yellow-500">✓</div>
+              <div className="text-[9px] sm:text-xs text-zinc-400 mt-0.5 sm:mt-1">1h/4h/1d</div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-zinc-700 disabled:cursor-not-allowed text-black font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition-colors text-sm sm:text-base"
+          >
+            {isAnalyzing
+              ? '분석 중...'
+              : results
+                ? '최신 데이터 불러오기'
+                : '멀티 타임프레임 분석 시작'
+            }
+          </button>
+
+          {error && (
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
+              <p className="text-xs sm:text-sm text-red-500">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Results */}
+        {results && (
+          <div ref={resultsRef} className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+            <div className="p-3 sm:p-6 border-b border-zinc-800">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h2 className="text-base sm:text-lg font-bold text-white">분석 결과</h2>
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+                  <div className="text-xs sm:text-sm">
+                    <span className="text-zinc-400">전체: </span>
+                    <span className="text-white font-medium">{results.totalAnalyzed}</span>
+                  </div>
+                  <div className="text-xs sm:text-sm">
+                    <span className="text-zinc-400">발견: </span>
+                    <span className="text-green-500 font-bold">{results.foundCount}</span>
+                  </div>
+                  <div className="text-xs sm:text-sm">
+                    <span className="text-zinc-400">업비트: </span>
+                    <span className="text-purple-400 font-medium">
+                      {results.results.filter(r => r.exchange === 'upbit').length}
+                    </span>
+                  </div>
+                  <div className="text-xs sm:text-sm">
+                    <span className="text-zinc-400">빗썸: </span>
+                    <span className="text-blue-400 font-medium">
+                      {results.results.filter(r => r.exchange === 'bithumb').length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cache Status */}
+              {results.cacheAge !== undefined && (
+                <div className="flex items-center gap-2 text-[10px] sm:text-xs">
+                  <div className="flex items-center gap-1.5">
+                    {results.cached ? (
+                      <>
+                        <div className={`w-2 h-2 rounded-full ${results.stale ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                        <span className="text-zinc-400">
+                          {results.stale ? '갱신 중...' : '최신 데이터'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-zinc-400">새로 분석됨</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-zinc-500">•</span>
+                  <span className="text-zinc-400">
+                    업데이트: {formatCacheAge(results.cacheAge)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Search Input */}
+            {results.foundCount > 0 && (
+              <div className="p-3 sm:p-4 border-b border-zinc-800">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="종목 검색... (예: BTC, ETH)"
+                    className="w-full bg-zinc-800 text-white placeholder-zinc-500 rounded-lg px-4 py-2.5 sm:py-3 pl-10 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                  />
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-zinc-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {searchQuery && (
+                  <div className="mt-2 text-xs sm:text-sm text-zinc-400">
+                    검색 결과: <span className="text-yellow-500 font-medium">{filteredResults.length}</span>개
+                  </div>
+                )}
+              </div>
+            )}
+
+            {results.foundCount > 0 ? (
+              filteredResults.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-zinc-800 bg-zinc-900/50">
+                        <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">종목</th>
+                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">30분</th>
+                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">1시간</th>
+                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">4시간</th>
+                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">일봉</th>
+                        <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden md:table-cell">현재가</th>
+                        <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden lg:table-cell">거래대금</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentPageResults.map((result) => (
+                      <tr
+                        key={`${result.exchange}-${result.symbol}`}
+                        onClick={() => setSelectedCoin(result)}
+                        className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                      >
+                        <td className="p-2 sm:p-4">
+                          <div className="flex items-center gap-1.5 sm:gap-3">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                              <span className="text-[9px] sm:text-xs font-bold text-yellow-500">
+                                {result.symbol.slice(0, 2)}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[11px] sm:text-sm font-medium text-white flex items-center gap-1 sm:gap-2">
+                                <span className="truncate">{result.symbol}</span>
+                                {result.allTimeframes && (
+                                  <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold whitespace-nowrap">
+                                    전체
+                                  </span>
+                                )}
+                                {result.boxCount === 3 && (
+                                  <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold whitespace-nowrap">
+                                    3개
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] sm:text-xs text-zinc-400">
+                                {result.exchange === 'upbit' ? '업비트' : '빗썸'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Timeframe indicators */}
+                        <td className="text-center p-2 sm:p-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['30m'])} text-xs sm:text-sm font-bold`}>
+                              {getTimeframeIcon(result.timeframes['30m'])}
+                            </div>
+                            {result.timeframes['30m'].hasBox && result.timeframes['30m'].position && (
+                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['30m'].position)}`}>
+                                {getPositionLabel(result.timeframes['30m'].position)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center p-2 sm:p-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['1h'])} text-xs sm:text-sm font-bold`}>
+                              {getTimeframeIcon(result.timeframes['1h'])}
+                            </div>
+                            {result.timeframes['1h'].hasBox && result.timeframes['1h'].position && (
+                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['1h'].position)}`}>
+                                {getPositionLabel(result.timeframes['1h'].position)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center p-2 sm:p-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['4h'])} text-xs sm:text-sm font-bold`}>
+                              {getTimeframeIcon(result.timeframes['4h'])}
+                            </div>
+                            {result.timeframes['4h'].hasBox && result.timeframes['4h'].position && (
+                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['4h'].position)}`}>
+                                {getPositionLabel(result.timeframes['4h'].position)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center p-2 sm:p-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['1d'])} text-xs sm:text-sm font-bold`}>
+                              {getTimeframeIcon(result.timeframes['1d'])}
+                            </div>
+                            {result.timeframes['1d'].hasBox && result.timeframes['1d'].position && (
+                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['1d'].position)}`}>
+                                {getPositionLabel(result.timeframes['1d'].position)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="text-right p-2 sm:p-4 hidden md:table-cell">
+                          <div className="text-xs sm:text-sm text-white font-medium">
+                            ₩{formatNumber(result.currentPrice)}
+                          </div>
+                        </td>
+                        <td className="text-right p-2 sm:p-4 hidden lg:table-cell">
+                          <div className="text-xs sm:text-sm text-zinc-400">
+                            ₩{formatVolume(result.volume)}
+                          </div>
+                        </td>
+                      </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="p-4 sm:p-6 border-t border-zinc-800">
+                      <div className="flex items-center justify-between flex-wrap gap-3">
+                        {/* 이전 버튼 */}
+                        <button
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors text-sm sm:text-base"
+                        >
+                          ← 이전
+                        </button>
+
+                        {/* 페이지 번호 */}
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
+                          {getPageNumbers().map((page, index) => (
+                            page === -1 ? (
+                              <span key={`ellipsis-${index}`} className="px-2 text-zinc-500">
+                                ...
+                              </span>
+                            ) : (
+                              <button
+                                key={page}
+                                onClick={() => handlePageChange(page)}
+                                className={`
+                                  w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-sm sm:text-base transition-colors
+                                  ${currentPage === page
+                                    ? 'bg-yellow-500 text-black'
+                                    : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                  }
+                                `}
+                              >
+                                {page}
+                              </button>
+                            )
+                          ))}
+                        </div>
+
+                        {/* 다음 버튼 */}
+                        <button
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                          className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors text-sm sm:text-base"
+                        >
+                          다음 →
+                        </button>
+                      </div>
+
+                      {/* 페이지 정보 */}
+                      <div className="mt-3 sm:mt-4 text-center text-xs sm:text-sm text-zinc-400">
+                        {startIndex + 1}-{Math.min(endIndex, filteredResults.length)} / 총 {filteredResults.length}개
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-6 sm:p-8 text-center">
+                  <div className="text-zinc-500">
+                    <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="text-xs sm:text-sm">"{searchQuery}"에 대한 검색 결과가 없습니다</p>
+                    <p className="text-[10px] sm:text-xs mt-1">다른 종목명으로 검색해보세요</p>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="p-6 sm:p-8 text-center">
+                <div className="text-zinc-500">
+                  <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-xs sm:text-sm">박스권을 형성한 종목이 없습니다</p>
+                  <p className="text-[10px] sm:text-xs mt-1">조건을 만족하는 종목이 발견되지 않았습니다</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Info Section */}
+        <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
+          <div className="flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-zinc-400">
+            <span className="text-zinc-500 text-sm">💡</span>
+            <div className="space-y-2 sm:space-y-3">
+              <div>
+                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">멀티 타임프레임 분석:</p>
+                <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
+                  <li>• 업비트 & 빗썸 전체 종목 분석 (중복 제외)</li>
+                  <li>• 30분봉, 1시간봉, 4시간봉, 일봉 동시 확인</li>
+                  <li>• 여러 시간대에서 동시 박스권 형성 종목 우선 표시</li>
+                  <li>• ✓ 표시: 해당 시간대에서 박스권 형성</li>
+                  <li>• 캐시된 데이터 즉시 표시, 백그라운드 자동 갱신 (5분)</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">가격 위치:</p>
+                <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
+                  <li>• <span className="text-red-400">돌파</span>: 박스권 상단 돌파 (3% 이상)</li>
+                  <li>• <span className="text-orange-400">상단</span>: 박스권 상단 구간 (66-100%)</li>
+                  <li>• <span className="text-yellow-400">중단</span>: 박스권 중간 구간 (33-66%)</li>
+                  <li>• <span className="text-green-400">하단</span>: 박스권 하단 구간 (0-33%)</li>
+                  <li>• <span className="text-blue-400">이탈</span>: 박스권 하단 이탈 (3% 이상)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Chart Modal */}
+      {selectedCoin && (
+        <MultiTimeframeChartModal
+          isOpen={!!selectedCoin}
+          onClose={() => setSelectedCoin(null)}
+          symbol={selectedCoin.symbol}
+          exchange={selectedCoin.exchange}
+          timeframes={selectedCoin.timeframes}
+        />
+      )}
+    </div>
+  );
+}

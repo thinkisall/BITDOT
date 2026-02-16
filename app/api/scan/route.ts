@@ -33,11 +33,13 @@ export async function POST() {
     const bithumbData = await bithumbRes.json();
 
     const marketsWithVolume: MarketWithVolume[] = [];
+    const upbitSymbols = new Set<string>(); // 업비트 종목 추적
 
     // 업비트 데이터 처리
     upbitTickers.forEach((ticker: any) => {
       const symbol = ticker.market.replace('KRW-', '');
       if (!MAJOR_COINS.has(symbol)) {
+        upbitSymbols.add(symbol); // 업비트 종목 기록
         marketsWithVolume.push({
           symbol,
           market: ticker.market,
@@ -47,10 +49,11 @@ export async function POST() {
       }
     });
 
-    // 빗썸 데이터 처리
+    // 빗썸 데이터 처리 (업비트에 없는 종목만 추가)
     if (bithumbData.status === '0000' && bithumbData.data) {
       Object.entries(bithumbData.data).forEach(([symbol, ticker]: [string, any]) => {
-        if (symbol !== 'date' && !MAJOR_COINS.has(symbol)) {
+        if (symbol !== 'date' && !MAJOR_COINS.has(symbol) && !upbitSymbols.has(symbol)) {
+          // 업비트에 없는 종목만 추가
           marketsWithVolume.push({
             symbol,
             market: symbol,

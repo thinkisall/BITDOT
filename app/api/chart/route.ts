@@ -1,6 +1,16 @@
 // app/api/chart/route.ts
-import { fetchUpbitCandles } from "@/lib/upbitCandles";
-import { fetchBithumbCandles } from "@/lib/bithumbCandles";
+import {
+  fetchUpbitCandles30M,
+  fetchUpbitCandles,
+  fetchUpbitCandles4H,
+  fetchUpbitCandles1D
+} from "@/lib/upbitCandles";
+import {
+  fetchBithumbCandles30M,
+  fetchBithumbCandles,
+  fetchBithumbCandles4H,
+  fetchBithumbCandles1D
+} from "@/lib/bithumbCandles";
 import { SMA } from "technicalindicators";
 
 export async function GET(req: Request) {
@@ -8,6 +18,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get('symbol');
     const exchange = searchParams.get('exchange') as 'upbit' | 'bithumb';
+    const timeframe = searchParams.get('timeframe') || '1h'; // 기본값 1시간
 
     if (!symbol || !exchange) {
       return Response.json({ error: 'Missing parameters' }, { status: 400 });
@@ -17,9 +28,33 @@ export async function GET(req: Request) {
     let candles;
     if (exchange === 'upbit') {
       const market = `KRW-${symbol}`;
-      candles = await fetchUpbitCandles(market, 250);
+      switch (timeframe) {
+        case '30m':
+          candles = await fetchUpbitCandles30M(market, 250);
+          break;
+        case '4h':
+          candles = await fetchUpbitCandles4H(market, 250);
+          break;
+        case '1d':
+          candles = await fetchUpbitCandles1D(market, 250);
+          break;
+        default: // '1h'
+          candles = await fetchUpbitCandles(market, 250);
+      }
     } else {
-      candles = await fetchBithumbCandles(symbol, 250);
+      switch (timeframe) {
+        case '30m':
+          candles = await fetchBithumbCandles30M(symbol, 250);
+          break;
+        case '4h':
+          candles = await fetchBithumbCandles4H(symbol, 250);
+          break;
+        case '1d':
+          candles = await fetchBithumbCandles1D(symbol, 250);
+          break;
+        default: // '1h'
+          candles = await fetchBithumbCandles(symbol, 250);
+      }
     }
 
     // lightweight-charts 형식으로 변환
