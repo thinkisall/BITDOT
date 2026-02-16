@@ -37,6 +37,8 @@ interface AnalysisResponse {
   stale?: boolean;
   cacheAge?: number; // 초 단위
   lastUpdated?: number;
+  analyzing?: boolean; // 현재 분석 중인지 여부
+  message?: string; // 메시지 (캐시 없을 때)
 }
 
 export default function AnalysisPage() {
@@ -55,9 +57,16 @@ export default function AnalysisPage() {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // 자동 갱신 (stale 상태일 때 10초마다 폴링)
+  // 자동 갱신 (캐시 없거나 분석 중일 때 10초마다 폴링)
   useEffect(() => {
-    if (!results?.stale) return;
+    // 캐시가 없거나 분석 중이면 자동 갱신
+    const shouldAutoRefresh = results && (
+      results.totalAnalyzed === 0 || // 캐시 없음
+      results.analyzing || // 분석 중
+      results.stale // stale 상태
+    );
+
+    if (!shouldAutoRefresh) return;
 
     const interval = setInterval(async () => {
       try {
@@ -68,10 +77,7 @@ export default function AnalysisPage() {
 
         if (response.ok) {
           const data: AnalysisResponse = await response.json();
-          // stale이 아니면 업데이트 완료
-          if (!data.stale) {
-            setResults(data);
-          }
+          setResults(data);
         }
       } catch (e) {
         console.error('Auto-refresh failed:', e);
@@ -79,7 +85,7 @@ export default function AnalysisPage() {
     }, 10000); // 10초마다
 
     return () => clearInterval(interval);
-  }, [results?.stale]);
+  }, [results?.totalAnalyzed, results?.analyzing, results?.stale]);
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -305,29 +311,41 @@ export default function AnalysisPage() {
               </div>
 
               {/* Cache Status */}
-              {results.cacheAge !== undefined && (
-                <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-                  <div className="flex items-center gap-1.5">
-                    {results.cached ? (
-                      <>
-                        <div className={`w-2 h-2 rounded-full ${results.stale ? 'bg-yellow-500' : 'bg-green-500'}`} />
-                        <span className="text-zinc-400">
-                          {results.stale ? '갱신 중...' : '최신 데이터'}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span className="text-zinc-400">새로 분석됨</span>
-                      </>
-                    )}
-                  </div>
-                  <span className="text-zinc-500">•</span>
-                  <span className="text-zinc-400">
-                    업데이트: {formatCacheAge(results.cacheAge)}
-                  </span>
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  {results.totalAnalyzed === 0 ? (
+                    <>
+                      <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                      <span className="text-zinc-400">{results.message || '분석 준비 중...'}</span>
+                    </>
+                  ) : results.analyzing ? (
+                    <>
+                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-zinc-400">백그라운드 분석 중...</span>
+                    </>
+                  ) : results.cached ? (
+                    <>
+                      <div className={`w-2 h-2 rounded-full ${results.stale ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                      <span className="text-zinc-400">
+                        {results.stale ? '갱신 중...' : '최신 데이터'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-zinc-400">분석 완료</span>
+                    </>
+                  )}
                 </div>
-              )}
+                {results.cacheAge !== undefined && results.totalAnalyzed > 0 && (
+                  <>
+                    <span className="text-zinc-500">•</span>
+                    <span className="text-zinc-400">
+                      업데이트: {formatCacheAge(results.cacheAge)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Search Input */}
@@ -580,7 +598,8 @@ export default function AnalysisPage() {
                   <li>• 30분봉, 1시간봉, 4시간봉, 일봉 동시 확인</li>
                   <li>• 여러 시간대에서 동시 박스권 형성 종목 우선 표시</li>
                   <li>• ✓ 표시: 해당 시간대에서 박스권 형성</li>
-                  <li>• 캐시된 데이터 즉시 표시, 백그라운드 자동 갱신 (5분)</li>
+                  <li>• 서버 시작 시 자동 분석 & 5분마다 백그라운드 갱신</li>
+                  <li>• 캐시된 데이터 즉시 표시, 분석 중에도 이전 데이터 확인 가능</li>
                 </ul>
               </div>
 

@@ -18,7 +18,8 @@ let cachedResults: {
 } | null = null;
 
 let isAnalyzing = false; // 분석 진행 중 플래그
-const CACHE_DURATION = 5 * 60 * 1000; // 5분
+let backgroundWorkerStarted = false; // 백그라운드 워커 시작 플래그
+const ANALYSIS_INTERVAL = 5 * 60 * 1000; // 5분마다 분석
 
 interface MarketWithVolume {
   symbol: string;
@@ -286,55 +287,65 @@ async function performAnalysis() {
   }
 }
 
-// POST 핸들러 - 캐시된 결과 반환 및 백그라운드 갱신
+// 백그라운드 워커 시작 함수
+function startBackgroundWorker() {
+  if (backgroundWorkerStarted) {
+    console.log('Background worker already started');
+    return;
+  }
+
+  backgroundWorkerStarted = true;
+  console.log('Starting continuous background analysis worker (every 5 minutes)...');
+
+  // 즉시 첫 번째 분석 시작
+  performAnalysis().catch(err => {
+    console.error('Initial background analysis failed:', err);
+  });
+
+  // 5분마다 자동으로 분석 실행
+  setInterval(() => {
+    if (!isAnalyzing) {
+      console.log('Background worker: Starting scheduled analysis...');
+      performAnalysis().catch(err => {
+        console.error('Scheduled background analysis failed:', err);
+      });
+    } else {
+      console.log('Background worker: Analysis already in progress, skipping this cycle');
+    }
+  }, ANALYSIS_INTERVAL);
+}
+
+// POST 핸들러 - 캐시된 결과 즉시 반환
 export async function POST() {
   try {
-    const now = Date.now();
-    const isCacheValid = cachedResults && (now - cachedResults.lastUpdated) < CACHE_DURATION;
+    // 첫 요청 시 백그라운드 워커 시작
+    if (!backgroundWorkerStarted) {
+      startBackgroundWorker();
+    }
 
-    // 캐시가 유효하면 즉시 반환
-    if (isCacheValid && cachedResults) {
-      console.log('Returning cached results');
-
-      // 캐시가 3분 이상 지났으면 백그라운드에서 갱신 시작
-      const cacheAge = now - cachedResults.lastUpdated;
-      if (cacheAge > 3 * 60 * 1000 && !isAnalyzing) {
-        console.log('Cache is getting old, triggering background refresh...');
-        performAnalysis().catch(err => console.error('Background analysis failed:', err));
-      }
+    // 캐시가 있으면 즉시 반환 (나이와 상관없이)
+    if (cachedResults) {
+      const cacheAge = Date.now() - cachedResults.lastUpdated;
+      console.log(`Returning cached results (age: ${Math.floor(cacheAge / 1000)}s, analyzing: ${isAnalyzing})`);
 
       return Response.json({
         ...cachedResults,
         cached: true,
         cacheAge: Math.floor(cacheAge / 1000), // 초 단위
+        analyzing: isAnalyzing, // 현재 분석 중인지 여부
       });
     }
 
-    // 캐시가 없거나 만료됨
-    if (!cachedResults) {
-      // 첫 요청 - 분석 완료까지 대기
-      console.log('No cache available, performing initial analysis...');
-      const results = await performAnalysis();
-      return Response.json({
-        ...results,
-        cached: false,
-        cacheAge: 0,
-      });
-    }
-
-    // 캐시가 만료되었고 이미 분석 중이 아니면 시작
-    if (!isAnalyzing) {
-      console.log('Cache expired, starting background analysis...');
-      performAnalysis().catch(err => console.error('Background analysis failed:', err));
-    }
-
-    // 만료된 캐시라도 반환 (stale-while-revalidate)
-    const cacheAge = now - cachedResults.lastUpdated;
+    // 캐시가 아직 없는 경우 (서버 첫 시작)
+    console.log('No cache available yet. Analysis in progress...');
     return Response.json({
-      ...cachedResults,
-      cached: true,
-      stale: true,
-      cacheAge: Math.floor(cacheAge / 1000),
+      results: [],
+      totalAnalyzed: 0,
+      foundCount: 0,
+      lastUpdated: 0,
+      cached: false,
+      analyzing: isAnalyzing,
+      message: '분석이 진행 중입니다. 잠시 후 다시 시도해주세요.',
     });
   } catch (error: any) {
     console.error('Multi-timeframe API error:', error);
