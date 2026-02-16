@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import Header from '../components/Header';
 import MultiTimeframeChartModal from '../components/MultiTimeframeChartModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,6 +51,7 @@ export default function AnalysisPage() {
   const [selectedCoin, setSelectedCoin] = useState<MultiTimeframeResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [binanceAlphaSymbols, setBinanceAlphaSymbols] = useState<string[]>([]);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const ITEMS_PER_PAGE = 20;
@@ -57,6 +59,22 @@ export default function AnalysisPage() {
 
   // API URL (환경 변수 또는 상대 경로)
   const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+  // Fetch Binance Alpha symbols
+  useEffect(() => {
+    const fetchBinanceAlpha = async () => {
+      try {
+        const response = await fetch('/api/binance-alpha');
+        const result = await response.json();
+        if (result.symbols) {
+          setBinanceAlphaSymbols(result.symbols);
+        }
+      } catch (error) {
+        console.error('Failed to fetch Binance Alpha symbols:', error);
+      }
+    };
+    fetchBinanceAlpha();
+  }, []);
 
   // 페이지 마운트 시 자동으로 데이터 가져오기
   useEffect(() => {
@@ -195,6 +213,12 @@ export default function AnalysisPage() {
     }
   };
 
+  // Check if coin is in Binance Alpha
+  const isBinanceAlpha = (coinSymbol: string) => {
+    const normalized = coinSymbol.toUpperCase();
+    return binanceAlphaSymbols.some(symbol => symbol.toUpperCase() === normalized);
+  };
+
   // 검색 필터링
   const filteredResults = results?.results.filter(result =>
     result.symbol.toLowerCase().includes(searchQuery.toLowerCase())
@@ -268,6 +292,22 @@ export default function AnalysisPage() {
           <p className="text-xs sm:text-sm text-zinc-400">
             30분봉, 1시간봉, 4시간봉, 일봉에서 박스권을 동시에 확인합니다
           </p>
+        </div>
+
+        {/* 데이터 로딩 안내 */}
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+          <div className="flex items-start gap-2">
+            <span className="text-yellow-500 text-base sm:text-lg mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="text-xs sm:text-sm text-yellow-500 font-medium mb-1">
+                데이터 로딩 안내
+              </p>
+              <p className="text-[10px] sm:text-xs text-zinc-300">
+                처음 접속하거나 캐시가 없는 경우, 데이터 분석에 <strong className="text-yellow-500">약 3분 정도</strong> 소요됩니다.
+                잠시만 기다려주시면 자동으로 결과가 표시됩니다.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Analysis Settings Card */}
@@ -492,8 +532,13 @@ export default function AnalysisPage() {
                               </span>
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[11px] sm:text-sm font-medium text-white flex items-center gap-1 sm:gap-2">
+                              <div className="text-[11px] sm:text-sm font-medium text-white flex items-center gap-1 sm:gap-2 flex-wrap">
                                 <span className="truncate">{result.symbol}</span>
+                                {isBinanceAlpha(result.symbol) && (
+                                  <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold whitespace-nowrap">
+                                    ALPHA
+                                  </span>
+                                )}
                                 {result.allTimeframes && (
                                   <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold whitespace-nowrap">
                                     전체
@@ -724,9 +769,12 @@ export default function AnalysisPage() {
                     <span>실시간 백그라운드 분석 결과 즉시 확인</span>
                   </li>
                 </ul>
-                <button className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors text-sm sm:text-base">
+                <Link
+                  href="/premium"
+                  className="inline-block w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors text-sm sm:text-base text-center"
+                >
                   프리미엄 가입하기
-                </button>
+                </Link>
               </div>
             )}
           </div>

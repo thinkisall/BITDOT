@@ -63,6 +63,9 @@ export default function MultiTimeframeChartModal({
   timeframes,
 }: MultiTimeframeChartModalProps) {
   const [activeTimeframe, setActiveTimeframe] = useState<TimeframeKey>('1h');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [chartData, setChartData] = useState<{ currentPrice: number; ma50: number } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const isCreatingChart = useRef(false);
@@ -87,14 +90,26 @@ export default function MultiTimeframeChartModal({
       isCreatingChart.current = true;
 
       try {
+        setError(null);
+        setIsLoading(true);
+
         // API에서 해당 시간대 캔들 데이터 가져오기
         const response = await fetch(
           `/api/chart?symbol=${symbol}&exchange=${exchange}&timeframe=${activeTimeframe}`
         );
+
         const data = await response.json();
 
+        if (!response.ok || data.error) {
+          const errorMsg = data.error || '차트 데이터를 불러오는데 실패했습니다.';
+          console.error('Chart API error:', errorMsg, { symbol, exchange, timeframe: activeTimeframe });
+          throw new Error(errorMsg);
+        }
+
         if (!data.candles || data.candles.length === 0) {
-          console.error('No candle data received');
+          setError('차트 데이터가 없습니다. 잠시 후 다시 시도해주세요.');
+          setIsLoading(false);
+          isCreatingChart.current = false;
           return;
         }
 
@@ -134,6 +149,15 @@ export default function MultiTimeframeChartModal({
         });
 
         candlestickSeries.setData(data.candles);
+
+        // 현재가와 MA50 값 저장 (매수 시그널 판단용)
+        const currentPrice = data.candles[data.candles.length - 1]?.close;
+        const ma50Value = data.sma50?.[data.sma50.length - 1]?.value;
+        if (currentPrice && ma50Value) {
+          setChartData({ currentPrice, ma50: ma50Value });
+        } else {
+          setChartData(null);
+        }
 
         // 이동평균선 (있는 경우)
         if (data.sma50) {
@@ -184,9 +208,11 @@ export default function MultiTimeframeChartModal({
           });
           resizeObserver.observe(chartContainerRef.current);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching chart data:', error);
+        setError(error?.message || '차트를 불러오는 중 오류가 발생했습니다.');
       } finally {
+        setIsLoading(false);
         isCreatingChart.current = false;
       }
     };
@@ -265,7 +291,35 @@ export default function MultiTimeframeChartModal({
 
         {/* Chart Container */}
         <div className="flex-1 p-3 sm:p-6 overflow-auto">
-          <div ref={chartContainerRef} className="w-full" />
+          {/* 차트 컨테이너 (항상 렌더링) */}
+          <div className="relative">
+            <div ref={chartContainerRef} className="w-full" />
+
+            {/* 로딩 오버레이 */}
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 rounded-lg">
+                <div className="text-zinc-400 text-sm">차트 로딩 중...</div>
+              </div>
+            )}
+
+            {/* 에러 오버레이 */}
+            {error && !isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80 rounded-lg">
+                <div className="text-center">
+                  <div className="text-red-500 text-sm mb-2">⚠️ {error}</div>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setActiveTimeframe(activeTimeframe); // 재시도
+                    }}
+                    className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm rounded-lg transition-colors"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Box Info */}
           {timeframes[activeTimeframe].hasBox && (
@@ -307,6 +361,42 @@ export default function MultiTimeframeChartModal({
               </p>
             </div>
           )}
+
+          {/* 매수 시그널 - 1시간봉 50선 근처 */}
+          {activeTimeframe === '1h' && chartData && (() => {
+            const diff = Math.abs(chartData.currentPrice - chartData.ma50);
+            const diffPercent = (diff / chartData.ma50) * 100;
+            const isNearMA50 = diffPercent <= 1; // ±1% 이내
+
+            if (isNearMA50) {
+              return (
+                <div className="mt-4 p-3 sm:p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg sm:text-xl">✓</span>
+                    <h3 className="text-sm sm:text-base font-bold text-green-500">매수 가능 구간</h3>
+                  </div>
+                  <div className="text-xs sm:text-sm text-zinc-300 space-y-1">
+                    <p>현재가가 50일 이동평균선 근처에 위치해 있습니다.</p>
+                    <div className="flex items-center gap-3 sm:gap-4 mt-2 text-[10px] sm:text-xs">
+                      <div>
+                        <span className="text-zinc-500">현재가:</span>
+                        <span className="text-white font-medium ml-1">₩{chartData.currentPrice.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">MA50:</span>
+                        <span className="text-red-400 font-medium ml-1">₩{chartData.ma50.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">차이:</span>
+                        <span className="text-yellow-400 font-medium ml-1">{diffPercent.toFixed(2)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ const ITEMS_PER_PAGE = 20;
 export default function MarketTable({ data, isConnected }: MarketTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [binanceAlphaSymbols, setBinanceAlphaSymbols] = useState<string[]>([]);
   const tableTopRef = useRef<HTMLDivElement>(null);
 
   // Filter data based on search query
@@ -22,6 +23,22 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
         coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : data;
+
+  // Fetch Binance Alpha symbols
+  useEffect(() => {
+    const fetchBinanceAlpha = async () => {
+      try {
+        const response = await fetch('/api/binance-alpha');
+        const result = await response.json();
+        if (result.symbols) {
+          setBinanceAlphaSymbols(result.symbols);
+        }
+      } catch (error) {
+        console.error('Failed to fetch Binance Alpha symbols:', error);
+      }
+    };
+    fetchBinanceAlpha();
+  }, []);
 
   // Reset to page 1 when search query or data changes
   useEffect(() => {
@@ -80,6 +97,12 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  // Check if coin is in Binance Alpha
+  const isBinanceAlpha = (coinSymbol: string) => {
+    const normalized = coinSymbol.toUpperCase();
+    return binanceAlphaSymbols.some(symbol => symbol.toUpperCase() === normalized);
   };
 
   const getPageNumbers = () => {
@@ -239,7 +262,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                             <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
                           </div>
                           <div>
-                            <div className="text-sm font-medium text-white">{coin.name}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium text-white">{coin.name}</div>
+                              {isBinanceAlpha(coin.symbol) && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">
+                                  ALPHA
+                                </span>
+                              )}
+                            </div>
                             <div className="text-xs text-zinc-500">{coin.symbol}</div>
                           </div>
                         </div>
@@ -313,7 +343,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                             <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
                           </div>
                           <div className="min-w-0">
-                            <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+                            <div className="flex items-center gap-1">
+                              <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+                              {isBinanceAlpha(coin.symbol) && (
+                                <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">
+                                  α
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[8px] text-zinc-500">#{getRank(coin)}</div>
                           </div>
                         </div>
