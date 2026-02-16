@@ -95,6 +95,8 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
           color: '#ef4444',
           lineWidth: 2,
           title: 'MA50',
+          priceLineVisible: false,
+          lastValueVisible: false,
         });
         sma50Series.setData(data.sma50);
 
@@ -103,6 +105,8 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
           color: '#f97316',
           lineWidth: 2,
           title: 'MA110',
+          priceLineVisible: false,
+          lastValueVisible: false,
         });
         sma110Series.setData(data.sma110);
 
@@ -111,6 +115,8 @@ export default function BoxChartModal({ isOpen, onClose, symbol, exchange, boxDa
           color: '#eab308',
           lineWidth: 2,
           title: 'MA180',
+          priceLineVisible: false,
+          lastValueVisible: false,
         });
         sma180Series.setData(data.sma180);
 
