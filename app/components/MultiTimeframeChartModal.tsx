@@ -171,6 +171,28 @@ export default function MultiTimeframeChartModal({
           sma50Series.setData(data.sma50);
         }
 
+        if (data.sma110) {
+          const sma110Series = chart.addLineSeries({
+            color: '#eab308',
+            lineWidth: 2,
+            title: 'MA110',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          sma110Series.setData(data.sma110);
+        }
+
+        if (data.sma180) {
+          const sma180Series = chart.addLineSeries({
+            color: '#f97316',
+            lineWidth: 2,
+            title: 'MA180',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          sma180Series.setData(data.sma180);
+        }
+
         // 박스권이 있는 경우 표시
         const boxInfo = timeframes[activeTimeframe];
         if (boxInfo.hasBox && boxInfo.top && boxInfo.bottom) {
@@ -260,7 +282,7 @@ export default function MultiTimeframeChartModal({
         </div>
 
         {/* Timeframe Tabs */}
-        <div className="flex gap-1 sm:gap-2 p-3 sm:p-4 border-b border-zinc-800 overflow-x-auto">
+        <div className="flex gap-1 sm:gap-2 p-3 sm:p-4 border-b border-zinc-800 overflow-x-auto scrollbar-hide">
           {(Object.keys(TIMEFRAME_LABELS) as TimeframeKey[]).map((tf) => {
             const boxInfo = timeframes[tf];
             const isActive = activeTimeframe === tf;
@@ -269,7 +291,7 @@ export default function MultiTimeframeChartModal({
                 key={tf}
                 onClick={() => setActiveTimeframe(tf)}
                 className={`
-                  flex-1 min-w-[70px] sm:min-w-[100px] px-3 sm:px-4 py-2 sm:py-3 rounded-lg font-medium text-xs sm:text-sm transition-all
+                  flex-none w-[90px] sm:w-auto sm:flex-1 sm:min-w-[110px] px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium text-xs sm:text-sm transition-all
                   ${isActive
                     ? 'bg-yellow-500 text-black'
                     : boxInfo.hasBox
@@ -279,8 +301,8 @@ export default function MultiTimeframeChartModal({
                 `}
               >
                 <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                  <span>{TIMEFRAME_LABELS[tf]}</span>
-                  <span className="text-[10px] sm:text-xs">
+                  <span className="whitespace-nowrap">{TIMEFRAME_LABELS[tf]}</span>
+                  <span className="text-[10px] sm:text-xs whitespace-nowrap">
                     {boxInfo.hasBox ? '✓ 박스권' : '−'}
                   </span>
                 </div>
@@ -291,6 +313,42 @@ export default function MultiTimeframeChartModal({
 
         {/* Chart Container */}
         <div className="flex-1 p-3 sm:p-6 overflow-auto">
+          {/* 매수 시그널 - 1시간봉 50선 근처 (차트 위) */}
+          {activeTimeframe === '1h' && chartData && (() => {
+            const diff = Math.abs(chartData.currentPrice - chartData.ma50);
+            const diffPercent = (diff / chartData.ma50) * 100;
+            const isNearMA50 = diffPercent <= 1; // ±1% 이내
+
+            if (isNearMA50) {
+              return (
+                <div className="mb-4 p-3 sm:p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg sm:text-xl">✓</span>
+                    <h3 className="text-sm sm:text-base font-bold text-green-500">매수 가능 구간</h3>
+                  </div>
+                  <div className="text-xs sm:text-sm text-zinc-300 space-y-1">
+                    <p>현재가가 50일 이동평균선 근처에 위치해 있습니다.</p>
+                    <div className="flex items-center gap-3 sm:gap-4 mt-2 text-[10px] sm:text-xs flex-wrap">
+                      <div>
+                        <span className="text-zinc-500">현재가:</span>
+                        <span className="text-white font-medium ml-1">₩{chartData.currentPrice.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">MA50:</span>
+                        <span className="text-red-400 font-medium ml-1">₩{chartData.ma50.toFixed(0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">차이:</span>
+                        <span className="text-yellow-400 font-medium ml-1">{diffPercent.toFixed(2)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* 차트 컨테이너 (항상 렌더링) */}
           <div className="relative">
             <div ref={chartContainerRef} className="w-full" />
@@ -361,42 +419,6 @@ export default function MultiTimeframeChartModal({
               </p>
             </div>
           )}
-
-          {/* 매수 시그널 - 1시간봉 50선 근처 */}
-          {activeTimeframe === '1h' && chartData && (() => {
-            const diff = Math.abs(chartData.currentPrice - chartData.ma50);
-            const diffPercent = (diff / chartData.ma50) * 100;
-            const isNearMA50 = diffPercent <= 1; // ±1% 이내
-
-            if (isNearMA50) {
-              return (
-                <div className="mt-4 p-3 sm:p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg sm:text-xl">✓</span>
-                    <h3 className="text-sm sm:text-base font-bold text-green-500">매수 가능 구간</h3>
-                  </div>
-                  <div className="text-xs sm:text-sm text-zinc-300 space-y-1">
-                    <p>현재가가 50일 이동평균선 근처에 위치해 있습니다.</p>
-                    <div className="flex items-center gap-3 sm:gap-4 mt-2 text-[10px] sm:text-xs">
-                      <div>
-                        <span className="text-zinc-500">현재가:</span>
-                        <span className="text-white font-medium ml-1">₩{chartData.currentPrice.toFixed(0)}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500">MA50:</span>
-                        <span className="text-red-400 font-medium ml-1">₩{chartData.ma50.toFixed(0)}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500">차이:</span>
-                        <span className="text-yellow-400 font-medium ml-1">{diffPercent.toFixed(2)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            return null;
-          })()}
         </div>
       </div>
     </div>
