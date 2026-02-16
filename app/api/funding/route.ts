@@ -1,6 +1,8 @@
 // app/api/funding/route.ts
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 interface FundingData {
   symbol: string;
   exchange: 'binance' | 'bybit' | 'okx';
@@ -52,7 +54,7 @@ export async function GET() {
 // Binance Futures Funding Rate
 async function fetchBinanceFunding(): Promise<FundingData[]> {
   try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex');
+    const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex', { cache: 'no-store' });
     const data = await response.json();
 
     // 디버깅: 첫 번째 항목 로깅
@@ -82,7 +84,7 @@ async function fetchBinanceFunding(): Promise<FundingData[]> {
 // Bybit Funding Rate
 async function fetchBybitFunding(): Promise<FundingData[]> {
   try {
-    const response = await fetch('https://api.bybit.com/v5/market/tickers?category=linear');
+    const response = await fetch('https://api.bybit.com/v5/market/tickers?category=linear', { cache: 'no-store' });
     const data = await response.json();
 
     if (data.retCode !== 0 || !data.result?.list) {
