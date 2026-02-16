@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Header from '../components/Header';
 import MultiTimeframeChartModal from '../components/MultiTimeframeChartModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TimeframeBoxInfo {
   hasBox: boolean;
@@ -42,6 +43,7 @@ interface AnalysisResponse {
 }
 
 export default function AnalysisPage() {
+  const { user, isPremium } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export default function AnalysisPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const ITEMS_PER_PAGE = 20;
+  const PREMIUM_REQUIRED_PAGES = [1, 2]; // 1, 2페이지는 프리미엄 필요
 
   // API URL (환경 변수 또는 상대 경로)
   const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -205,10 +208,20 @@ export default function AnalysisPage() {
 
   // 페이지 변경 및 스크롤
   const handlePageChange = (page: number) => {
+    // 프리미엄 필요한 페이지 체크
+    if (PREMIUM_REQUIRED_PAGES.includes(page) && !isPremium) {
+      // 프리미엄 아니면 페이지 변경하지 않음 (업그레이드 안내 표시)
+      return;
+    }
+
     setCurrentPage(page);
     // 결과 목록 최상단으로 스크롤
     resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // 현재 페이지가 프리미엄 필요한지 체크
+  const isCurrentPagePremiumRequired = PREMIUM_REQUIRED_PAGES.includes(currentPage);
+  const canViewCurrentPage = !isCurrentPagePremiumRequired || isPremium;
 
   // 페이지 버튼 생성 (최대 5개 표시)
   const getPageNumbers = () => {
@@ -431,7 +444,41 @@ export default function AnalysisPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {currentPageResults.map((result) => (
+                      {!canViewCurrentPage ? (
+                        // 프리미엄 필요 - 잠금 표시
+                        <tr>
+                          <td colSpan={7} className="p-8 sm:p-12">
+                            <div className="text-center">
+                              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-yellow-500/10 mb-4">
+                                <svg className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                              </div>
+                              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">프리미엄 전용 콘텐츠</h3>
+                              <p className="text-sm sm:text-base text-zinc-400 mb-6">
+                                1-2페이지의 상위 종목은 프리미엄 회원만 확인할 수 있습니다
+                              </p>
+                              {user ? (
+                                <button className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors">
+                                  프리미엄 업그레이드
+                                </button>
+                              ) : (
+                                <div className="space-y-3">
+                                  <p className="text-sm text-zinc-500">로그인 후 프리미엄 혜택을 확인하세요</p>
+                                  <button
+                                    onClick={() => {/* 로그인 모달 열기 */}}
+                                    className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors"
+                                  >
+                                    로그인하기
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        // 일반 유저 또는 프리미엄 유저 - 데이터 표시
+                        currentPageResults.map((result) => (
                       <tr
                         key={`${result.exchange}-${result.symbol}`}
                         onClick={() => setSelectedCoin(result)}
@@ -526,7 +573,8 @@ export default function AnalysisPage() {
                           </div>
                         </td>
                       </tr>
-                      ))}
+                        ))
+                      )}
                     </tbody>
                   </table>
 
@@ -545,27 +593,44 @@ export default function AnalysisPage() {
 
                         {/* 페이지 번호 */}
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
-                          {getPageNumbers().map((page, index) => (
-                            page === -1 ? (
-                              <span key={`ellipsis-${index}`} className="px-2 text-zinc-500">
-                                ...
-                              </span>
-                            ) : (
+                          {getPageNumbers().map((page, index) => {
+                            if (page === -1) {
+                              return (
+                                <span key={`ellipsis-${index}`} className="px-2 text-zinc-500">
+                                  ...
+                                </span>
+                              );
+                            }
+
+                            const isPremiumPage = PREMIUM_REQUIRED_PAGES.includes(page);
+                            const isLocked = isPremiumPage && !isPremium;
+
+                            return (
                               <button
                                 key={page}
                                 onClick={() => handlePageChange(page)}
+                                disabled={isLocked}
                                 className={`
-                                  w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-sm sm:text-base transition-colors
+                                  w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-sm sm:text-base transition-colors relative
                                   ${currentPage === page
                                     ? 'bg-yellow-500 text-black'
-                                    : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                    : isLocked
+                                      ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'
+                                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
                                   }
                                 `}
+                                title={isLocked ? '프리미엄 전용' : undefined}
                               >
-                                {page}
+                                {isLocked ? (
+                                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                  </svg>
+                                ) : (
+                                  page
+                                )}
                               </button>
-                            )
-                          ))}
+                            );
+                          })}
                         </div>
 
                         {/* 다음 버튼 */}
@@ -605,6 +670,63 @@ export default function AnalysisPage() {
                   <p className="text-xs sm:text-sm">박스권을 형성한 종목이 없습니다</p>
                   <p className="text-[10px] sm:text-xs mt-1">조건을 만족하는 종목이 발견되지 않았습니다</p>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Premium Info Section */}
+        {user && (
+          <div className={`mt-4 sm:mt-6 p-4 sm:p-6 rounded-lg border ${
+            isPremium
+              ? 'bg-yellow-500/5 border-yellow-500/30'
+              : 'bg-zinc-900 border-zinc-800'
+          }`}>
+            {isPremium ? (
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-bold text-yellow-500 mb-1">
+                    프리미엄 회원
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-400">
+                    모든 페이지의 상위 종목 데이터를 제한 없이 확인하실 수 있습니다
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    프리미엄으로 업그레이드하세요
+                  </h3>
+                </div>
+                <ul className="space-y-2 mb-4 text-xs sm:text-sm text-zinc-400">
+                  <li className="flex items-start gap-2">
+                    <span className="text-yellow-500 mt-0.5">✓</span>
+                    <span>1-2페이지의 상위 종목 데이터 무제한 열람</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-yellow-500 mt-0.5">✓</span>
+                    <span>돌파 확률이 높은 최상위 종목 우선 확인</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-yellow-500 mt-0.5">✓</span>
+                    <span>실시간 백그라운드 분석 결과 즉시 확인</span>
+                  </li>
+                </ul>
+                <button className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors text-sm sm:text-base">
+                  프리미엄 가입하기
+                </button>
               </div>
             )}
           </div>

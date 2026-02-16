@@ -263,9 +263,23 @@ async function performAnalysis() {
     const bithumbBoxCount = validResults.filter(r => r.exchange === 'bithumb').length;
     console.log(`Box patterns found: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`);
 
-    // 박스권 개수순, 거래량순 정렬
+    // 돌파 개수 계산 함수
+    const countBreakouts = (result: MultiTimeframeResult) => {
+      return Object.values(result.timeframes).filter(tf => tf.position === 'breakout').length;
+    };
+
+    // 돌파 개수순, 박스권 개수순, 거래량순 정렬
     validResults.sort((a, b) => {
+      const aBreakouts = countBreakouts(a);
+      const bBreakouts = countBreakouts(b);
+
+      // 1순위: 돌파 개수 많은 순
+      if (bBreakouts !== aBreakouts) return bBreakouts - aBreakouts;
+
+      // 2순위: 박스권 개수 많은 순
       if (b.boxCount !== a.boxCount) return b.boxCount - a.boxCount;
+
+      // 3순위: 거래량 많은 순
       return b.volume - a.volume;
     });
 
