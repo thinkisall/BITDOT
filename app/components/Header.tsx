@@ -3,9 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthButton from "./AuthButton";
+import { useAuth } from "@/contexts/AuthContext";
+
+// 관리자 이메일 목록
+const ADMIN_EMAILS = ['thinkisall@gmail.com', 'bitdamoabom@gmail.com'];
 
 export default function Header() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  // 관리자 체크
+  const isAdmin = user && ADMIN_EMAILS.includes(user.email || '');
 
   return (
     <header className="border-b border-zinc-800 bg-zinc-950">
@@ -41,6 +49,14 @@ export default function Header() {
             >
               게시판
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className={`transition-colors ${pathname === "/admin" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+              >
+                관리자
+              </Link>
+            )}
           </nav>
         </div>
         <AuthButton />
