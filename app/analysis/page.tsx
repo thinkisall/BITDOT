@@ -52,6 +52,27 @@ export default function AnalysisPage() {
 
   const ITEMS_PER_PAGE = 20;
 
+  // 페이지 마운트 시 자동으로 데이터 가져오기
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/multi-timeframe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          const data: AnalysisResponse = await response.json();
+          setResults(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch initial data:', e);
+      }
+    };
+
+    fetchData();
+  }, []); // 빈 배열 = 페이지 마운트 시 한 번만 실행
+
   // 검색어 변경 시 페이지 초기화
   useEffect(() => {
     setCurrentPage(1);
