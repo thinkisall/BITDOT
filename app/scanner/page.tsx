@@ -167,7 +167,15 @@ export default function ScannerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {scanResults.picked.map((result) => (
+                    {scanResults.picked
+                      .sort((a, b) => {
+                        // 주목 표시 종목을 맨 위로
+                        if (a.nearTop && !b.nearTop) return -1;
+                        if (!a.nearTop && b.nearTop) return 1;
+                        // 나머지는 거래량 순
+                        return b.volume - a.volume;
+                      })
+                      .map((result) => (
                       <tr
                         key={`${result.exchange}-${result.symbol}`}
                         onClick={() => setSelectedCoin(result)}
