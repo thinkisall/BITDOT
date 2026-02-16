@@ -21,6 +21,61 @@ interface FundingResponse {
 type ExchangeFilter = 'all' | 'binance' | 'bybit' | 'okx';
 type SortType = 'highest' | 'lowest' | 'positive' | 'negative';
 
+// 브라우저에서 직접 Binance API 호출
+async function fetchBinanceFunding(): Promise<FundingData[]> {
+  try {
+    const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex');
+    const data = await response.json();
+
+    return data
+      .filter((item: any) => item.symbol.endsWith('USDT'))
+      .map((item: any) => {
+        const fundingRate = parseFloat(item.lastFundingRate || '0');
+        return {
+          symbol: item.symbol.replace('USDT', ''),
+          exchange: 'binance' as const,
+          fundingRate,
+          fundingRatePercent: fundingRate * 100,
+          nextFundingTime: parseInt(item.nextFundingTime || '0'),
+          markPrice: parseFloat(item.markPrice || '0'),
+        };
+      });
+  } catch (error) {
+    console.error('Binance funding error:', error);
+    return [];
+  }
+}
+
+// 브라우저에서 직접 Bybit API 호출
+async function fetchBybitFunding(): Promise<FundingData[]> {
+  try {
+    const response = await fetch('https://api.bybit.com/v5/market/tickers?category=linear');
+    const data = await response.json();
+
+    if (data.retCode !== 0 || !data.result?.list) {
+      console.error('Bybit API error:', data);
+      return [];
+    }
+
+    return data.result.list
+      .filter((item: any) => item.symbol.endsWith('USDT'))
+      .map((item: any) => {
+        const fundingRate = parseFloat(item.fundingRate || '0');
+        return {
+          symbol: item.symbol.replace('USDT', ''),
+          exchange: 'bybit' as const,
+          fundingRate,
+          fundingRatePercent: fundingRate * 100,
+          nextFundingTime: parseInt(item.nextFundingTime || '0'),
+          markPrice: parseFloat(item.markPrice || '0'),
+        };
+      });
+  } catch (error) {
+    console.error('Bybit funding error:', error);
+    return [];
+  }
+}
+
 export default function FundingPage() {
   const [fundingData, setFundingData] = useState<FundingResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,25 +95,22 @@ export default function FundingPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/funding');
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch funding data');
-      }
+      const [binanceData, bybitData] = await Promise.all([
+        fetchBinanceFunding(),
+        fetchBybitFunding(),
+      ]);
 
-      const data: FundingResponse = await response.json();
+      const allData = [...binanceData, ...bybitData];
+      allData.sort((a, b) => Math.abs(b.fundingRate) - Math.abs(a.fundingRate));
 
-      // 디버깅: 받은 데이터 확인
-      console.log('Frontend received data count:', data.count);
-      if (data.data.length > 0) {
-        console.log('Frontend sample data:', data.data[0]);
-        console.log('fundingRate:', data.data[0].fundingRate);
-        console.log('fundingRatePercent:', data.data[0].fundingRatePercent);
-      }
-
-      setFundingData(data);
+      setFundingData({
+        data: allData,
+        timestamp: Date.now(),
+        count: allData.length,
+      });
     } catch (err: any) {
-      console.error('Frontend error:', err);
+      console.error('Funding fetch error:', err);
       setError(err.message || 'Failed to fetch funding data');
     } finally {
       setIsLoading(false);
@@ -154,17 +206,6 @@ export default function FundingPage() {
 
   const filteredData = getFilteredAndSortedData();
 
-  // 디버깅: 필터링된 데이터 확인
-  if (filteredData.length > 0 && fundingData) {
-    console.log('Filtered data count:', filteredData.length);
-    console.log('First 3 items:', filteredData.slice(0, 3).map(d => ({
-      symbol: d.symbol,
-      exchange: d.exchange,
-      fundingRate: d.fundingRate,
-      fundingRatePercent: d.fundingRatePercent
-    })));
-  }
-
   return (
     <div className="min-h-screen bg-zinc-950">
       <Header />
@@ -176,7 +217,7 @@ export default function FundingPage() {
             실시간 펀딩비 (Funding Rate)
           </h1>
           <p className="text-xs sm:text-sm text-zinc-400">
-            Binance, Bybit, OKX의 실시간 선물 펀딩비를 확인하세요
+            Binance, Bybit의 실시간 선물 펀딩비를 확인하세요
           </p>
         </div>
 
@@ -206,7 +247,7 @@ export default function FundingPage() {
 
         {/* Stats */}
         {fundingData && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
               <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">총 종목</div>
               <div className="text-base sm:text-xl font-bold text-white">{fundingData.count}</div>
@@ -221,12 +262,6 @@ export default function FundingPage() {
               <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">Bybit</div>
               <div className="text-base sm:text-xl font-bold text-orange-500">
                 {fundingData.data.filter(d => d.exchange === 'bybit').length}
-              </div>
-            </div>
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
-              <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">OKX</div>
-              <div className="text-base sm:text-xl font-bold text-blue-500">
-                {fundingData.data.filter(d => d.exchange === 'okx').length}
               </div>
             </div>
           </div>
@@ -247,7 +282,7 @@ export default function FundingPage() {
 
           {/* Exchange Filter */}
           <div className="flex gap-2 mb-3 sm:mb-4 overflow-x-auto scrollbar-hide">
-            {(['all', 'binance', 'bybit', 'okx'] as ExchangeFilter[]).map((exchange) => (
+            {(['all', 'binance', 'bybit'] as ExchangeFilter[]).map((exchange) => (
               <button
                 key={exchange}
                 onClick={() => setExchangeFilter(exchange)}
