@@ -5,6 +5,10 @@
   "framework": "nextjs",
   "rewrites": [
     {
+      "source": "/api/funding",
+      "destination": "/api/funding"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://anopisthographically-ungambling-lashanda.ngrok-free.dev/api/:path*"
     }
