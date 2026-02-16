@@ -11,7 +11,7 @@ import {
   fetchBithumbCandles4H,
   fetchBithumbCandles1D
 } from "@/lib/bithumbCandles";
-import { SMA } from "technicalindicators";
+import { SMA, BollingerBands } from "technicalindicators";
 
 export async function GET(req: Request) {
   try {
@@ -90,11 +90,25 @@ export async function GET(req: Request) {
       value: value,
     }));
 
+    // Bollinger Bands 계산 (20-period, 2 std dev)
+    const bbInput = {
+      period: 20,
+      values: closes,
+      stdDev: 2,
+    };
+    const bbValues = BollingerBands.calculate(bbInput);
+    const bollingerBands = bbValues.map((value, index) => ({
+      time: Math.floor(candles[index + 19].t / 1000) as any,
+      upper: value.upper,
+      lower: value.lower,
+    }));
+
     return Response.json({
       candles: chartCandles,
       sma50: sma50Data,
       sma110: sma110Data,
       sma180: sma180Data,
+      bollingerBands: bollingerBands,
     });
   } catch (error: any) {
     console.error('Chart API error:', error);

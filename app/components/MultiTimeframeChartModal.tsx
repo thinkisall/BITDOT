@@ -193,6 +193,35 @@ export default function MultiTimeframeChartModal({
           sma180Series.setData(data.sma180);
         }
 
+        // Bollinger Bands
+        if (data.bollingerBands) {
+          // Upper Band
+          const bbUpperSeries = chart.addLineSeries({
+            color: '#8b5cf6',
+            lineWidth: 1,
+            lineStyle: 2, // dashed
+            title: 'BB Upper',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          bbUpperSeries.setData(
+            data.bollingerBands.map((bb: any) => ({ time: bb.time, value: bb.upper }))
+          );
+
+          // Lower Band
+          const bbLowerSeries = chart.addLineSeries({
+            color: '#8b5cf6',
+            lineWidth: 1,
+            lineStyle: 2, // dashed
+            title: 'BB Lower',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          bbLowerSeries.setData(
+            data.bollingerBands.map((bb: any) => ({ time: bb.time, value: bb.lower }))
+          );
+        }
+
         // 박스권이 있는 경우 표시
         const boxInfo = timeframes[activeTimeframe];
         if (boxInfo.hasBox && boxInfo.top && boxInfo.bottom) {
