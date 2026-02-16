@@ -6,16 +6,21 @@ import { createClient } from '@supabase/supabase-js';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
 // 서비스 역할 키로 Supabase 클라이언트 생성 (RLS 우회)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // 서비스 키 필요
-  {
+const getSupabaseAdmin = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase URL or Service Role Key is missing');
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
-  }
-);
+  });
+};
 
 // GET - 모든 유저 조회
 export async function GET(request: NextRequest) {
@@ -31,6 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 모든 유저 조회 (서비스 키로 RLS 우회)
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('users')
       .select('*')
@@ -72,6 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 프리미엄 상태 업데이트
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('users')
       .update({

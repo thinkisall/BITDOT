@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // 프리미엄 만료 확인
           const isValid = await checkPremiumExpiry(firestoreUser);
           setIsPremium(isValid);
-          setPremiumUntil(firestoreUser.premiumUntil);
+          setPremiumUntil(firestoreUser.premiumUntil ?? null);
         } catch (error) {
           console.error('Error loading user data:', error);
           setIsPremium(false);
