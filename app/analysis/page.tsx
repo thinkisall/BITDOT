@@ -52,11 +52,14 @@ export default function AnalysisPage() {
 
   const ITEMS_PER_PAGE = 20;
 
+  // API URL (환경 변수 또는 상대 경로)
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
   // 페이지 마운트 시 자동으로 데이터 가져오기
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/multi-timeframe', {
+        const response = await fetch(`${API_URL}/api/multi-timeframe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -71,7 +74,7 @@ export default function AnalysisPage() {
     };
 
     fetchData();
-  }, []); // 빈 배열 = 페이지 마운트 시 한 번만 실행
+  }, [API_URL]); // API_URL 변경 시 재실행
 
   // 검색어 변경 시 페이지 초기화
   useEffect(() => {
@@ -91,7 +94,7 @@ export default function AnalysisPage() {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch('/api/multi-timeframe', {
+        const response = await fetch(`${API_URL}/api/multi-timeframe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -114,7 +117,7 @@ export default function AnalysisPage() {
     setResults(null);
 
     try {
-      const response = await fetch('/api/multi-timeframe', {
+      const response = await fetch(`${API_URL}/api/multi-timeframe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

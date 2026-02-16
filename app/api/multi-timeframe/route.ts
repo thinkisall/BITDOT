@@ -315,6 +315,19 @@ function startBackgroundWorker() {
   }, ANALYSIS_INTERVAL);
 }
 
+// CORS 헤더 추가 함수
+function addCorsHeaders(response: Response) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+// OPTIONS 핸들러 (CORS preflight)
+export async function OPTIONS() {
+  return addCorsHeaders(new Response(null, { status: 200 }));
+}
+
 // POST 핸들러 - 캐시된 결과 즉시 반환
 export async function POST() {
   try {
@@ -328,17 +341,17 @@ export async function POST() {
       const cacheAge = Date.now() - cachedResults.lastUpdated;
       console.log(`Returning cached results (age: ${Math.floor(cacheAge / 1000)}s, analyzing: ${isAnalyzing})`);
 
-      return Response.json({
+      return addCorsHeaders(Response.json({
         ...cachedResults,
         cached: true,
         cacheAge: Math.floor(cacheAge / 1000), // 초 단위
         analyzing: isAnalyzing, // 현재 분석 중인지 여부
-      });
+      }));
     }
 
     // 캐시가 아직 없는 경우 (서버 첫 시작)
     console.log('No cache available yet. Analysis in progress...');
-    return Response.json({
+    return addCorsHeaders(Response.json({
       results: [],
       totalAnalyzed: 0,
       foundCount: 0,
@@ -346,12 +359,12 @@ export async function POST() {
       cached: false,
       analyzing: isAnalyzing,
       message: '분석이 진행 중입니다. 잠시 후 다시 시도해주세요.',
-    });
+    }));
   } catch (error: any) {
     console.error('Multi-timeframe API error:', error);
-    return Response.json(
+    return addCorsHeaders(Response.json(
       { error: error?.message || 'Analysis failed' },
       { status: 500 }
-    );
+    ));
   }
 }
