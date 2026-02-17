@@ -93,7 +93,8 @@ interface MultiTimeframeResult {
   boxCount: number; // 박스권 형성된 시간대 개수
   allTimeframes: boolean; // 모든 시간대에서 박스권 형성
   goldenAlignment?: boolean; // 1시간봉 정배열 (MA50 > MA110 > MA180)
-  cloudStatus?: 'above' | 'near'; // 구름 위 or 구름 2% 이내 아래(주목)
+  cloudStatus?: 'above' | 'near';   // 1h 구름 위 or 구름 2% 이내 아래(주목)
+  cloudStatus4h?: 'above' | 'near'; // 4h 구름 위 or 구름 2% 이내 아래(주목)
   volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
   watchlist?: { // 관심종목 (1시간봉 MA50 우상향)
     isUptrend: boolean;
@@ -309,7 +310,7 @@ async function performAnalysis() {
           // ─ 정배열 여부 계산 (필터 아님 — 정렬 우선순위에만 사용) ──────────
           const goldenAlignment = detectGoldenAlignment(candles1h);
 
-          // ─ 사전 필터: 일목구름 상태 확인 ────────────────────────────────
+          // ─ 사전 필터: 1h 일목구름 상태 확인 ──────────────────────────────
           // 'above': 구름 위 (통과)
           // 'near' : 구름 상단 2% 이내 아래 (주목으로 통과)
           // 'below': 구름 상단 2% 이상 아래 (제외)
@@ -323,6 +324,9 @@ async function performAnalysis() {
             symbolCache.set(cacheKey, { result: filtered, timestamp: Date.now() });
             return filtered;
           }
+
+          // ─ 4h 일목구름 상태 확인 (필터 없음 — 정렬 가중치에만 사용) ────────
+          const cloudStatus4h = getIchimokuCloudStatus(candles4h, currentPrice);
 
           // 1시간봉 거래량 급증 탐지
           const volumeSpike = detectVolumeSpike(candles1h, 20);
@@ -413,6 +417,7 @@ async function performAnalysis() {
             allTimeframes,
             goldenAlignment,
             cloudStatus,
+            cloudStatus4h: cloudStatus4h === 'below' ? undefined : cloudStatus4h,
             volumeSpike,
             watchlist: ma50Analysis.isUptrend ? {
               isUptrend: true,
@@ -471,33 +476,37 @@ async function performAnalysis() {
       `box patterns: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`
     );
 
-    // 돌파 개수 계산 함수
-    const countBreakouts = (result: MultiTimeframeResult) => {
-      return Object.values(result.timeframes).filter(tf => tf.position === 'breakout').length;
+    // ─ 6-티어 우선순위 ─────────────────────────────────────────────────────
+    // Tier 6: 1h above + 4h above + 정배열  (최고)
+    // Tier 5: 1h above + 4h above
+    // Tier 4: 1h above + 4h near  + 정배열
+    // Tier 3: 1h above + 정배열   (4h above/near 아님)
+    // Tier 2: 1h above            (정배열 없음)
+    // Tier 1: 1h near  + 정배열
+    // Tier 0: 1h near             (정배열 없음)
+    const priorityScore = (r: MultiTimeframeResult): number => {
+      const h1 = r.cloudStatus;          // 'above' | 'near' | undefined
+      const h4 = r.cloudStatus4h;        // 'above' | 'near' | undefined
+      const ga = r.goldenAlignment ?? false;
+
+      if (h1 === 'above' && h4 === 'above' && ga) return 6;
+      if (h1 === 'above' && h4 === 'above')        return 5;
+      if (h1 === 'above' && h4 === 'near'  && ga)  return 4;
+      if (h1 === 'above' && ga)                    return 3;
+      if (h1 === 'above')                          return 2;
+      if (h1 === 'near'  && ga)                    return 1;
+      return 0; // h1 === 'near', no golden
     };
 
-    // 정배열 → 돌파 → 박스권 개수 → 거래량 순 정렬
     validResults.sort((a, b) => {
-      // 1순위: 정배열 (MA50 > MA110 > MA180) 여부
-      const aGolden = a.goldenAlignment ? 1 : 0;
-      const bGolden = b.goldenAlignment ? 1 : 0;
-      if (bGolden !== aGolden) return bGolden - aGolden;
+      // 1순위: 우선순위 합산 점수 (구름 위 + 정배열 조합)
+      const scoreDiff = priorityScore(b) - priorityScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
 
-      // 2순위: 구름 위 > 구름 근접(주목) 순
-      const cloudScore = (s?: string) => s === 'above' ? 2 : s === 'near' ? 1 : 0;
-      if (cloudScore(b.cloudStatus) !== cloudScore(a.cloudStatus))
-        return cloudScore(b.cloudStatus) - cloudScore(a.cloudStatus);
-
-      const aBreakouts = countBreakouts(a);
-      const bBreakouts = countBreakouts(b);
-
-      // 3순위: 돌파 개수 많은 순
-      if (bBreakouts !== aBreakouts) return bBreakouts - aBreakouts;
-
-      // 4순위: 박스권 개수 많은 순
+      // 2순위: 박스권 개수 많은 순
       if (b.boxCount !== a.boxCount) return b.boxCount - a.boxCount;
 
-      // 5순위: 거래량 많은 순
+      // 3순위: 거래량 많은 순
       return b.volume - a.volume;
     });
 

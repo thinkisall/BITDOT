@@ -47,6 +47,7 @@ interface MultiTimeframeResult {
   allTimeframes: boolean;
   goldenAlignment?: boolean;
   cloudStatus?: 'above' | 'near';
+  cloudStatus4h?: 'above' | 'near';
   volumeSpike?: VolumeSpike;
   watchlist?: {
     isUptrend: boolean;
@@ -574,9 +575,25 @@ export default function AnalysisPage() {
                                 {result.cloudStatus === 'near' && (
                                   <span
                                     className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 font-bold whitespace-nowrap"
-                                    title="일목구름 상단 2% 이내 — 돌파 임박 주목"
+                                    title="1h 일목구름 상단 2% 이내 — 돌파 임박 주목"
                                   >
                                     ☁ 주목
+                                  </span>
+                                )}
+                                {result.cloudStatus4h === 'above' && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 border border-violet-500/30 font-bold whitespace-nowrap"
+                                    title="4시간봉 일목구름 위 (강한 상승 신호)"
+                                  >
+                                    4h☁
+                                  </span>
+                                )}
+                                {result.cloudStatus4h === 'near' && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/20 font-bold whitespace-nowrap"
+                                    title="4시간봉 일목구름 상단 2% 이내 — 주목"
+                                  >
+                                    4h☁근접
                                   </span>
                                 )}
                                 {result.watchlist && (
