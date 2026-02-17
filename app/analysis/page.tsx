@@ -38,6 +38,11 @@ interface MultiTimeframeResult {
   boxCount: number;
   allTimeframes: boolean;
   volumeSpike?: VolumeSpike;
+  watchlist?: {
+    isUptrend: boolean;
+    slope: number;
+    ma50Current: number;
+  };
 }
 
 interface AnalysisResponse {
@@ -566,6 +571,14 @@ export default function AnalysisPage() {
                                     🔥 {result.volumeSpike.timeAgo}
                                   </span>
                                 )}
+                                {result.watchlist && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-bold whitespace-nowrap"
+                                    title={`1시간봉 MA50 우상향 (기울기 +${result.watchlist.slope}%)`}
+                                  >
+                                    ★ 관심
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[9px] sm:text-xs text-zinc-400">
                                 {result.exchange === 'upbit' ? '업비트' : '빗썸'}
@@ -811,6 +824,14 @@ export default function AnalysisPage() {
                   <li>• ✓ 표시: 해당 시간대에서 박스권 형성</li>
                   <li>• 서버 시작 시 자동 분석 & 5분마다 백그라운드 갱신</li>
                   <li>• 캐시된 데이터 즉시 표시, 분석 중에도 이전 데이터 확인 가능</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">관심종목:</p>
+                <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
+                  <li>• <span className="text-cyan-400">★ 관심</span>: 1시간봉 MA50이 우상향 추세 (최근 5봉 중 3봉 이상 상승)</li>
+                  <li>• 중장기 상승 추세에 있는 종목으로 박스권 돌파 시 추가 상승 가능성 높음</li>
                 </ul>
               </div>
 

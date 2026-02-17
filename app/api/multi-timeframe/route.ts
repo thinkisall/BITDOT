@@ -60,6 +60,51 @@ interface MultiTimeframeResult {
   boxCount: number; // 박스권 형성된 시간대 개수
   allTimeframes: boolean; // 모든 시간대에서 박스권 형성
   volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
+  watchlist?: { // 관심종목 (1시간봉 MA50 우상향)
+    isUptrend: boolean;
+    slope: number; // 기울기 퍼센트
+    ma50Current: number; // 현재 MA50 값
+  };
+}
+
+// 1시간봉 MA50 기울기 분석 함수 (우상향 추세 판별)
+function detectMA50Uptrend(candles: any[]): { isUptrend: boolean; slope?: number; ma50Current?: number } {
+  if (candles.length < 55) return { isUptrend: false }; // MA50 계산 + 기울기 비교에 최소 55개 필요
+
+  // MA50 계산 (최근 5개 시점)
+  const ma50Values: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    const endIdx = candles.length - i;
+    const startIdx = endIdx - 50;
+    if (startIdx < 0) break;
+    const slice = candles.slice(startIdx, endIdx);
+    const ma50 = slice.reduce((sum, c) => sum + c.close, 0) / 50;
+    ma50Values.unshift(ma50); // 시간순 정렬
+  }
+
+  if (ma50Values.length < 3) return { isUptrend: false };
+
+  // 기울기 판별: 최근 MA50 값들이 연속 상승하는지 확인
+  let risingCount = 0;
+  for (let i = 1; i < ma50Values.length; i++) {
+    if (ma50Values[i] > ma50Values[i - 1]) {
+      risingCount++;
+    }
+  }
+
+  // 기울기 퍼센트 (최근 MA50 vs 5봉 전 MA50)
+  const oldestMA = ma50Values[0];
+  const latestMA = ma50Values[ma50Values.length - 1];
+  const slopePercent = ((latestMA - oldestMA) / oldestMA) * 100;
+
+  // 조건: 최근 5개 중 3개 이상 상승 + 기울기 0% 초과
+  const isUptrend = risingCount >= 3 && slopePercent > 0;
+
+  return {
+    isUptrend,
+    slope: Math.round(slopePercent * 100) / 100, // 소수점 2자리
+    ma50Current: Math.round(latestMA),
+  };
 }
 
 // 거래량 급증 탐지 함수 (1시간봉 기준)
@@ -204,6 +249,9 @@ async function performAnalysis() {
           // 1시간봉 거래량 급증 탐지
           const volumeSpike = detectVolumeSpike(candles1h, 20);
 
+          // 1시간봉 MA50 우상향 추세 판별
+          const ma50Analysis = detectMA50Uptrend(candles1h);
+
           // 가격 위치 계산 함수
           const calculatePosition = (price: number, top: number, bottom: number) => {
             const boxHeight = top - bottom;
@@ -285,6 +333,11 @@ async function performAnalysis() {
             boxCount,
             allTimeframes,
             volumeSpike,
+            watchlist: ma50Analysis.isUptrend ? {
+              isUptrend: true,
+              slope: ma50Analysis.slope!,
+              ma50Current: ma50Analysis.ma50Current!,
+            } : undefined,
           };
         } catch (e: any) {
           console.error(`Error analyzing ${item.symbol} (${item.exchange}):`, e.message);
