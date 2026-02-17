@@ -66,8 +66,8 @@ export default function AnalysisPage() {
   const ITEMS_PER_PAGE = 20;
   const PREMIUM_REQUIRED_PAGES = [1, 2]; // 1, 2페이지는 프리미엄 필요
 
-  // API URL: Vercel에서는 Cloudflare Tunnel로, 로컬에서는 Next.js API 라우트로
-  const ANALYSIS_URL = process.env.NEXT_PUBLIC_API_URL || '/api/multi-timeframe';
+  // 항상 상대 경로 사용 (Vercel에서는 rewrite로 터널 프록시, 로컬에서는 Next.js API 직접)
+  const ANALYSIS_URL = '/api/multi-timeframe';
 
   // Fetch Binance Alpha symbols
   useEffect(() => {

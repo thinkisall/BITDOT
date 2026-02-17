@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return {
@@ -11,7 +13,15 @@ const nextConfig: NextConfig = {
             "https://api.maketruthy.com/api/:path*",
         },
       ],
-      beforeFiles: [],
+      // beforeFiles: 프로덕션에서만 multi-timeframe을 터널로 프록시
+      beforeFiles: isProd
+        ? [
+            {
+              source: "/api/multi-timeframe",
+              destination: "https://api.maketruthy.com/api/multi-timeframe",
+            },
+          ]
+        : [],
       fallback: [],
     };
   },
