@@ -2,78 +2,23 @@
 import { fetchUpbitCandles, fetchUpbitCandles4H, fetchUpbitCandles1D } from "@/lib/upbitCandles";
 import { fetchBithumbCandles, fetchBithumbCandles4H, fetchBithumbCandles1D } from "@/lib/bithumbCandles";
 import { findSupportResistanceLevels, detectBoxRanges } from "@/lib/supportResistance";
+import { createConcurrencyLimiter } from "@/lib/rateLimiter";
+import { fetchAllMarkets } from "@/lib/markets";
 
-// 메이저 코인 리스트 (제외할 코인들)
-const MAJOR_COINS = new Set([
-  'BTC', 'ETH', 'XRP', 'USDT', 'USDC', 'BNB', 'SOL', 'ADA', 'DOGE', 'TRX',
-  'DOT', 'MATIC', 'AVAX', 'LINK', 'UNI', 'ATOM', 'LTC', 'BCH', 'ETC', 'XLM'
-]);
-
-interface MarketWithVolume {
-  symbol: string;
-  market: string; // 'KRW-BTC' for Upbit, 'BTC' for Bithumb
-  volume: number;
-  exchange: 'upbit' | 'bithumb';
-}
+// 동시 요청 5개로 제한 (Upbit 10req/s, 3개 캔들 fetch × 5 = 15 → 여유 있게 설정)
+const limit = createConcurrencyLimiter(5);
 
 export async function POST() {
   try {
-    // 1. 업비트 마켓 데이터 가져오기
-    const upbitMarketsRes = await fetch('https://api.upbit.com/v1/market/all');
-    const upbitMarkets = await upbitMarketsRes.json();
-    const krwMarkets = upbitMarkets.filter((m: any) => m.market.startsWith('KRW-'));
+    // 공통 마켓 목록 (5분 캐시, scan/multi-timeframe 공유)
+    const allMarkets = await fetchAllMarkets();
+    const top300 = allMarkets.slice(0, 300);
 
-    // 2. 업비트 티커 데이터로 거래량 가져오기
-    const marketCodes = krwMarkets.map((m: any) => m.market).join(',');
-    const upbitTickerRes = await fetch(`https://api.upbit.com/v1/ticker?markets=${marketCodes}`);
-    const upbitTickers = await upbitTickerRes.json();
+    console.log(`Total markets: ${allMarkets.length}, Scanning top 300`);
 
-    // 3. 빗썸 티커 데이터 가져오기
-    const bithumbRes = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW');
-    const bithumbData = await bithumbRes.json();
-
-    const marketsWithVolume: MarketWithVolume[] = [];
-    const upbitSymbols = new Set<string>(); // 업비트 종목 추적
-
-    // 업비트 데이터 처리
-    upbitTickers.forEach((ticker: any) => {
-      const symbol = ticker.market.replace('KRW-', '');
-      if (!MAJOR_COINS.has(symbol)) {
-        upbitSymbols.add(symbol); // 업비트 종목 기록
-        marketsWithVolume.push({
-          symbol,
-          market: ticker.market,
-          volume: ticker.acc_trade_price_24h, // 24시간 누적 거래대금
-          exchange: 'upbit',
-        });
-      }
-    });
-
-    // 빗썸 데이터 처리 (업비트에 없는 종목만 추가)
-    if (bithumbData.status === '0000' && bithumbData.data) {
-      Object.entries(bithumbData.data).forEach(([symbol, ticker]: [string, any]) => {
-        if (symbol !== 'date' && !MAJOR_COINS.has(symbol) && !upbitSymbols.has(symbol)) {
-          // 업비트에 없는 종목만 추가
-          marketsWithVolume.push({
-            symbol,
-            market: symbol,
-            volume: Number(ticker.acc_trade_value_24H || 0), // 24시간 누적 거래대금
-            exchange: 'bithumb',
-          });
-        }
-      });
-    }
-
-    // 4. 거래량 순으로 정렬하고 상위 300개 선택
-    const top300 = marketsWithVolume
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 300);
-
-    console.log(`Total markets: ${marketsWithVolume.length}, Scanning top 300`);
-
-    // 5. 각 종목 스캔 (새로운 지지/저항 기반 박스권 탐지)
+    // 5. 각 종목 스캔 (컨커런시 5개 제한으로 Rate Limit 방지)
     const results = await Promise.all(
-      top300.map(async (item) => {
+      top300.map((item) => limit(async () => {
         try {
           let candles1h, candles4h, candles1d;
 
@@ -141,7 +86,7 @@ export async function POST() {
             error: String(e?.message ?? e)
           };
         }
-      })
+      }))
     );
 
     const picked = results.filter(r => r.ok);

@@ -79,7 +79,11 @@ export default function BoardPage() {
           <EmptyState />
         ) : (
           <>
-            <PostList posts={posts} />
+            <PostList
+              posts={posts}
+              user={user}
+              onDeleted={(postId) => setPosts(prev => prev.filter(p => p.id !== postId))}
+            />
 
             {hasMore && (
               <div className="mt-6 text-center">

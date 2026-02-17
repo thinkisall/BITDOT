@@ -25,6 +25,30 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+// --- localStorage 프리미엄 캐시 (5분 TTL) ---
+const PREMIUM_CACHE_KEY = 'bitdot_premium_cache';
+const PREMIUM_CACHE_TTL = 5 * 60 * 1000;
+
+function readPremiumCache(uid: string): { isPremium: boolean; premiumUntil: string | null } | null {
+  try {
+    const raw = localStorage.getItem(PREMIUM_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (cached.uid !== uid || Date.now() - cached.timestamp > PREMIUM_CACHE_TTL) return null;
+    return { isPremium: cached.isPremium, premiumUntil: cached.premiumUntil };
+  } catch { return null; }
+}
+
+function writePremiumCache(uid: string, isPremium: boolean, premiumUntil: Date | null) {
+  try {
+    localStorage.setItem(PREMIUM_CACHE_KEY, JSON.stringify({
+      uid, isPremium,
+      premiumUntil: premiumUntil?.toISOString() ?? null,
+      timestamp: Date.now(),
+    }));
+  } catch { /* localStorage 불가 환경 무시 */ }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isPremium, setIsPremium] = useState(false);
@@ -36,23 +60,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
+        // 캐시 우선 적용 → loading 즉시 해제, UI 빠르게 표시
+        const cached = readPremiumCache(firebaseUser.uid);
+        if (cached) {
+          setIsPremium(cached.isPremium);
+          setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
+          setLoading(false);
+        }
+
         try {
-          // Firestore에 유저 정보 생성/업데이트
           const firestoreUser = await createOrUpdateUser(
             firebaseUser.uid,
             firebaseUser.email || '',
             firebaseUser.displayName,
             firebaseUser.photoURL
           );
-
-          // 프리미엄 만료 확인
           const isValid = await checkPremiumExpiry(firestoreUser);
+          const until = firestoreUser.premiumUntil ?? null;
           setIsPremium(isValid);
-          setPremiumUntil(firestoreUser.premiumUntil ?? null);
+          setPremiumUntil(until);
+          writePremiumCache(firebaseUser.uid, isValid, until);
         } catch (error) {
           console.error('Error loading user data:', error);
-          setIsPremium(false);
-          setPremiumUntil(null);
+          if (!cached) { setIsPremium(false); setPremiumUntil(null); }
         }
       } else {
         setIsPremium(false);

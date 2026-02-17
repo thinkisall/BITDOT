@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Comment } from '@/lib/supabase/types';
-import { subscribeToComments } from '@/lib/supabase/comments';
+import { subscribeToComments, getComments } from '@/lib/supabase/comments';
 import CommentItem from './CommentItem';
 import CommentForm from './CommentForm';
 
@@ -27,8 +27,9 @@ export default function CommentList({ postId, user }: CommentListProps) {
     };
   }, [postId]);
 
-  const handleCommentChange = () => {
-    // 실시간 구독이 자동으로 업데이트
+  const handleCommentChange = async () => {
+    const updated = await getComments(postId);
+    setComments(updated);
   };
 
   return (

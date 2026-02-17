@@ -2,12 +2,33 @@
 
 import Link from 'next/link';
 import { Post } from '@/lib/supabase/types';
+import { deletePost } from '@/lib/supabase/posts';
+import { User } from 'firebase/auth';
 
 interface PostCardProps {
   post: Post;
+  user?: User | null;
+  onDeleted?: (postId: string) => void;
 }
 
-export default function PostCard({ post }: PostCardProps) {
+export default function PostCard({ post, user, onDeleted }: PostCardProps) {
+  const isAuthor = user?.uid === post.author_id;
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm('정말 삭제하시겠습니까?')) return;
+
+    try {
+      await deletePost(post.id, user!.uid);
+      onDeleted?.(post.id);
+    } catch (error: any) {
+      console.error('Error deleting post:', error);
+      alert(error?.message || '게시글 삭제에 실패했습니다.');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -63,6 +84,15 @@ export default function PostCard({ post }: PostCardProps) {
               <span>조회 {post.view_count}</span>
             </div>
           </div>
+
+          {isAuthor && (
+            <button
+              onClick={handleDelete}
+              className="shrink-0 px-2 py-1 rounded text-[10px] sm:text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+            >
+              삭제
+            </button>
+          )}
         </div>
       </div>
     </Link>

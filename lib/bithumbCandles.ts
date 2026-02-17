@@ -1,6 +1,31 @@
 // lib/bithumbCandles.ts
 import type { Candle } from "./scanBox";
 
+export async function fetchBithumbCandles5M(symbol: string, count = 200): Promise<Candle[]> {
+  const url = `https://api.bithumb.com/public/candlestick/${symbol}_KRW/5m`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+
+  if (json.status !== '0000' || !json.data) {
+    throw new Error('Invalid response from Bithumb');
+  }
+
+  const data = json.data;
+
+  const candles: Candle[] = data.slice(-count).map((candle: any[]) => ({
+    t: Number(candle[0]),
+    open: Number(candle[1]),
+    high: Number(candle[3]),
+    low: Number(candle[4]),
+    close: Number(candle[2]),
+    volume: Number(candle[5]),
+  }));
+
+  return candles;
+}
+
 export async function fetchBithumbCandles30M(symbol: string, count = 200): Promise<Candle[]> {
   const url = `https://api.bithumb.com/public/candlestick/${symbol}_KRW/30m`;
 

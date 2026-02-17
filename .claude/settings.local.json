@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx next build)",
-      "Bash(winget install:*)"
+      "Bash(winget install:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

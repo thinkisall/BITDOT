@@ -1,4 +1,5 @@
 // lib/supportResistance.ts
+// Density-Based Box Detection (KDE / Volume Profile 방식)
 import { Candle } from "./scanBox";
 
 export interface PriceLevel {
@@ -12,69 +13,171 @@ export interface BoxRange {
   bottom: number;
   type: 'support-support' | 'support-resistance' | 'resistance-resistance';
   candlesInRange: number;
-  score: number; // 박스권 신뢰도
+  score: number;
+  density: number; // 박스 내 캔들 비율 (0~1)
+  poc: number;     // Point of Control (가장 거래가 많았던 가격)
 }
 
-// 장대양봉 탐지
-export function findLongBullishCandles(candles: Candle[], multiplier = 1.5): Candle[] {
-  const avgBodySize = candles.reduce((sum, c) => sum + Math.abs(c.close - c.open), 0) / candles.length;
-
-  return candles.filter(c => {
-    const bodySize = Math.abs(c.close - c.open);
-    const isBullish = c.close > c.open;
-    return isBullish && bodySize >= avgBodySize * multiplier;
-  });
+// ─── ATR 계산 ─────────────────────────────────────────────────────────────────
+function calcATR(candles: Candle[], period = 14): number {
+  if (candles.length < 2) return 0;
+  const trs: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const h = candles[i].high;
+    const l = candles[i].low;
+    const pc = candles[i - 1].close;
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  const slice = trs.slice(-period);
+  return slice.reduce((s, v) => s + v, 0) / slice.length;
 }
 
-// 가격 레벨에서 터치 횟수 계산
-function countTouches(candles: Candle[], priceLevel: number, tolerance = 0.01): number {
-  let touches = 0;
-  const range = priceLevel * tolerance;
+// ─── 이상치 제거 ───────────────────────────────────────────────────────────────
+// High 상위 pct%, Low 하위 pct%를 이상치로 간주해 캔들 제외
+function removeOutliers(candles: Candle[], pct = 0.05): Candle[] {
+  if (candles.length < 20) return candles;
+  const highs = candles.map(c => c.high).sort((a, b) => a - b);
+  const lows  = candles.map(c => c.low ).sort((a, b) => a - b);
+  const cutHigh = highs[Math.floor(highs.length * (1 - pct))];
+  const cutLow  = lows [Math.floor(lows.length  * pct)];
+  return candles.filter(c => c.high <= cutHigh && c.low >= cutLow);
+}
 
-  for (const candle of candles) {
-    // 고가나 저가가 가격 레벨 근처에 있으면 터치로 간주
-    if (Math.abs(candle.high - priceLevel) <= range ||
-        Math.abs(candle.low - priceLevel) <= range ||
-        Math.abs(candle.open - priceLevel) <= range ||
-        Math.abs(candle.close - priceLevel) <= range) {
-      touches++;
+// ─── Volume-Weighted 가격 히스토그램 ─────────────────────────────────────────
+// 몸통(close/open) 가중치 2배 · 꼬리(high/low) 가중치 1배 · 거래량 스케일
+interface HistBin {
+  price: number;  // bin 중심가
+  weight: number; // volume-weighted 밀도
+  count: number;
+}
+
+function buildHistogram(candles: Candle[], binCount = 60): HistBin[] {
+  if (candles.length === 0) return [];
+
+  // 이상치 제거 후 몸통 가격 범위
+  const clean = removeOutliers(candles, 0.05);
+  const bodyPrices = clean.flatMap(c => [c.open, c.close]);
+  const minP = Math.min(...bodyPrices);
+  const maxP = Math.max(...bodyPrices);
+  if (maxP <= minP) return [];
+
+  const binSize = (maxP - minP) / binCount;
+
+  const bins: HistBin[] = Array.from({ length: binCount }, (_, i) => ({
+    price: minP + (i + 0.5) * binSize,
+    weight: 0,
+    count: 0,
+  }));
+
+  for (const c of clean) {
+    const vol = c.volume > 0 ? c.volume : 1;
+    // 몸통 × 2, 꼬리 × 1 가중치
+    const points: [number, number][] = [
+      [c.close, 2 * vol],
+      [c.open,  2 * vol],
+      [c.high,  1 * vol],
+      [c.low,   1 * vol],
+    ];
+    for (const [price, w] of points) {
+      if (price < minP || price > maxP) continue;
+      const idx = Math.min(Math.floor((price - minP) / binSize), binCount - 1);
+      bins[idx].weight += w;
+      bins[idx].count  += 1;
     }
   }
 
-  return touches;
+  return bins;
 }
 
-// 비슷한 가격 레벨 그룹화
-function groupSimilarLevels(levels: number[], tolerance = 0.005): number[] {
-  if (levels.length === 0) return [];
-
-  const sorted = [...levels].sort((a, b) => a - b);
-  const grouped: number[] = [];
-  let currentGroup = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const diff = Math.abs(sorted[i] - sorted[i - 1]) / sorted[i - 1];
-
-    if (diff <= tolerance) {
-      currentGroup.push(sorted[i]);
-    } else {
-      // 그룹의 평균을 대표 레벨로 사용
-      const avg = currentGroup.reduce((sum, v) => sum + v, 0) / currentGroup.length;
-      grouped.push(avg);
-      currentGroup = [sorted[i]];
-    }
-  }
-
-  // 마지막 그룹 처리
-  if (currentGroup.length > 0) {
-    const avg = currentGroup.reduce((sum, v) => sum + v, 0) / currentGroup.length;
-    grouped.push(avg);
-  }
-
-  return grouped;
+// ─── 5-bin 가우시안 스무딩 ────────────────────────────────────────────────────
+function smoothBins(bins: HistBin[]): number[] {
+  const weights = [0.06, 0.24, 0.4, 0.24, 0.06]; // 정규화된 가우시안
+  return bins.map((_, i) =>
+    weights.reduce((sum, w, j) => {
+      const idx = i - 2 + j;
+      return sum + w * (bins[idx]?.weight ?? 0);
+    }, 0)
+  );
 }
 
-// 지지/저항 레벨 탐지
+// ─── POC 탐지 ─────────────────────────────────────────────────────────────────
+function findPOC(bins: HistBin[], smoothed: number[]): number {
+  let maxIdx = 0;
+  for (let i = 1; i < smoothed.length; i++) {
+    if (smoothed[i] > smoothed[maxIdx]) maxIdx = i;
+  }
+  return bins[maxIdx].price;
+}
+
+// ─── POC 중심으로 박스 확장 ──────────────────────────────────────────────────
+function expandBox(
+  bins: HistBin[],
+  smoothed: number[],
+  pocPrice: number,
+  dropThreshold = 0.12 // 최대 밀도의 12% 이하면 박스 경계
+): { top: number; bottom: number } {
+  if (bins.length === 0) return { top: pocPrice, bottom: pocPrice };
+
+  const binSize = bins.length > 1 ? bins[1].price - bins[0].price : 1;
+  const pocIdx = smoothed.reduce(
+    (best, v, i) => (Math.abs(bins[i].price - pocPrice) < Math.abs(bins[best].price - pocPrice) ? i : best),
+    0
+  );
+
+  const maxW  = Math.max(...smoothed);
+  const cutoff = maxW * dropThreshold;
+
+  let topIdx    = pocIdx;
+  let bottomIdx = pocIdx;
+
+  while (topIdx + 1 < bins.length    && smoothed[topIdx + 1]    >= cutoff) topIdx++;
+  while (bottomIdx - 1 >= 0          && smoothed[bottomIdx - 1] >= cutoff) bottomIdx--;
+
+  return {
+    top:    bins[topIdx].price    + binSize / 2,
+    bottom: bins[bottomIdx].price - binSize / 2,
+  };
+}
+
+// ─── 단일 기간 밀도 박스 탐지 ─────────────────────────────────────────────────
+interface DensityBox {
+  top: number;
+  bottom: number;
+  poc: number;
+  density: number;
+  candlesInRange: number;
+}
+
+function detectDensityBox(
+  candles: Candle[],
+  period: number,
+  minCandlesInBox: number
+): DensityBox | null {
+  const target = candles.slice(-period);
+  if (target.length < 20) return null;
+
+  const bins     = buildHistogram(target, 60);
+  if (bins.length === 0) return null;
+
+  const smoothed = smoothBins(bins);
+  const poc      = findPOC(bins, smoothed);
+  const { top, bottom } = expandBox(bins, smoothed, poc, 0.12);
+
+  // 박스 높이 검증: 1.5% ~ 12%
+  const heightPct = (top - bottom) / bottom;
+  if (heightPct < 0.015 || heightPct > 0.12) return null;
+
+  // close 기준 박스 내 캔들 수 (1% 여유)
+  const inBox = target.filter(c => c.close <= top * 1.01 && c.close >= bottom * 0.99).length;
+  if (inBox < minCandlesInBox) return null;
+
+  const density = inBox / target.length;
+  if (density < 0.50) return null; // 50% 이상 캔들이 박스 안에 있어야 함
+
+  return { top, bottom, poc, density, candlesInRange: inBox };
+}
+
+// ─── 지지/저항 레벨 탐지 (Volume-Weighted Histogram 피크) ───────────────────
 export function findSupportResistanceLevels(
   candles4h: Candle[],
   candles1d: Candle[],
@@ -82,106 +185,102 @@ export function findSupportResistanceLevels(
   currentPrice: number,
   minTouches = 3
 ): PriceLevel[] {
-  // 1시간봉, 4시간봉, 일봉에서 장대양봉 찾기
-  const longCandles1h = findLongBullishCandles(candles1h, 2.0);
-  const longCandles4h = findLongBullishCandles(candles4h, 2.0);
-  const longCandles1d = findLongBullishCandles(candles1d, 2.0);
+  if (candles1h.length === 0) return [];
 
-  // 가격 레벨 수집 (시가와 종가)
-  const priceLevels: number[] = [];
+  const midPrice = candles1h[candles1h.length - 1].close;
 
-  longCandles1h.forEach(c => {
-    priceLevels.push(c.open, c.close);
-  });
+  // 멀티 타임프레임 캔들 합산 (4h, 1d는 더 강한 레벨이므로 가중치 복제)
+  const combined = [
+    ...candles1h.slice(-200),
+    ...candles4h.slice(-60),  ...candles4h.slice(-60),  // × 2
+    ...candles1d.slice(-30),  ...candles1d.slice(-30),  ...candles1d.slice(-30), // × 3
+  ];
 
-  longCandles4h.forEach(c => {
-    priceLevels.push(c.open, c.close);
-  });
+  const bins     = buildHistogram(combined, 80);
+  if (bins.length === 0) return [];
 
-  longCandles1d.forEach(c => {
-    priceLevels.push(c.open, c.close);
-  });
+  const smoothed = smoothBins(bins);
+  const maxW     = Math.max(...smoothed);
+  const peakCut  = maxW * 0.25; // 최대 밀도의 25% 이상인 피크만
 
-  // 비슷한 레벨 그룹화
-  const groupedLevels = groupSimilarLevels(priceLevels, 0.01);
+  // 지역 극대값 탐지
+  const touchRange = midPrice * 0.015;
+  const peaks: PriceLevel[] = [];
 
-  // 각 레벨에서 1시간봉 터치 횟수 계산
-  const levels: PriceLevel[] = groupedLevels
-    .map(price => ({
-      price,
-      touches: countTouches(candles1h, price, 0.015),
-      type: (price > currentPrice ? 'resistance' : 'support') as 'support' | 'resistance',
-    }))
-    .filter(level => level.touches >= minTouches)
-    .sort((a, b) => a.price - b.price);
+  for (let i = 1; i < smoothed.length - 1; i++) {
+    if (
+      smoothed[i] > smoothed[i - 1] &&
+      smoothed[i] >= smoothed[i + 1] &&
+      smoothed[i] >= peakCut
+    ) {
+      const price = bins[i].price;
 
-  return levels;
-}
+      // 1h봉 터치 횟수 (close/open/high/low 기준)
+      const touches = candles1h.filter(c =>
+        Math.abs(c.close - price) <= touchRange ||
+        Math.abs(c.open  - price) <= touchRange ||
+        Math.abs(c.high  - price) <= touchRange ||
+        Math.abs(c.low   - price) <= touchRange
+      ).length;
 
-// 캔들이 범위 안에 있는지 확인
-function candlesInRange(candles: Candle[], bottom: number, top: number): number {
-  let count = 0;
-
-  for (const candle of candles) {
-    // 캔들의 대부분이 범위 안에 있으면 카운트
-    const candleCenter = (candle.high + candle.low) / 2;
-    if (candleCenter >= bottom && candleCenter <= top) {
-      count++;
+      if (touches >= minTouches) {
+        peaks.push({
+          price,
+          touches,
+          type: price >= currentPrice ? 'resistance' : 'support',
+        });
+      }
     }
   }
 
-  return count;
+  return peaks.sort((a, b) => a.price - b.price);
 }
 
-// 박스권 탐지
+// ─── 박스권 탐지 (Density KDE 메인) ─────────────────────────────────────────
 export function detectBoxRanges(
   levels: PriceLevel[],
   candles1h: Candle[],
   minCandlesInBox = 10
 ): BoxRange[] {
   const boxes: BoxRange[] = [];
-  const recentCandles = candles1h.slice(-72); // 최근 72개 (3일)
 
-  // 연속된 레벨 쌍을 확인하여 박스권 찾기
-  for (let i = 0; i < levels.length - 1; i++) {
-    const bottom = levels[i].price;
-    const top = levels[i + 1].price;
-    const range = top - bottom;
-    const midPrice = (top + bottom) / 2;
-    const rangePercent = range / midPrice;
+  // 여러 lookback 윈도우로 탐지 (짧은 기간부터)
+  const periods = [48, 72, 96, 120];
 
-    // 범위가 너무 넓거나 좁으면 스킵
-    if (rangePercent > 0.2 || rangePercent < 0.01) continue;
+  for (const period of periods) {
+    const result = detectDensityBox(candles1h, period, minCandlesInBox);
+    if (!result) continue;
 
-    const candlesCount = candlesInRange(recentCandles, bottom, top);
+    const { top, bottom, poc, density, candlesInRange } = result;
 
-    // 최소 캔들 수 이상이면 박스권으로 인정
-    if (candlesCount >= minCandlesInBox) {
-      const bottomType = levels[i].type;
-      const topType = levels[i + 1].type;
+    // 중복 박스 제거 (top/bottom 모두 2% 이내면 같은 박스)
+    const isDup = boxes.some(
+      b => Math.abs(b.top - top) / top < 0.02 && Math.abs(b.bottom - bottom) / bottom < 0.02
+    );
+    if (isDup) continue;
 
-      let boxType: 'support-support' | 'support-resistance' | 'resistance-resistance';
-      if (bottomType === 'support' && topType === 'support') {
-        boxType = 'support-support';
-      } else if (bottomType === 'support' && topType === 'resistance') {
-        boxType = 'support-resistance';
-      } else {
-        boxType = 'resistance-resistance';
-      }
+    // levels에서 박스 상/하단에 가장 가까운 레벨로 type 결정
+    const nearBottom = levels
+      .filter(l => Math.abs(l.price - bottom) / bottom < 0.03)
+      .sort((a, b) => Math.abs(a.price - bottom) - Math.abs(b.price - bottom))[0];
+    const nearTop = levels
+      .filter(l => Math.abs(l.price - top) / top < 0.03)
+      .sort((a, b) => Math.abs(a.price - top) - Math.abs(b.price - top))[0];
 
-      // 점수 계산 (터치 횟수와 범위 내 캔들 수 기반)
-      const score = (levels[i].touches + levels[i + 1].touches) * candlesCount / recentCandles.length;
+    const bType = nearBottom?.type ?? 'support';
+    const tType = nearTop?.type    ?? 'resistance';
 
-      boxes.push({
-        top,
-        bottom,
-        type: boxType,
-        candlesInRange: candlesCount,
-        score,
-      });
-    }
+    let type: BoxRange['type'];
+    if (bType === 'support' && tType === 'support') type = 'support-support';
+    else if (bType === 'support')                    type = 'support-resistance';
+    else                                             type = 'resistance-resistance';
+
+    // score = density × 박스내비율 × 100
+    const target = candles1h.slice(-period);
+    const score  = density * (candlesInRange / target.length) * 100;
+
+    boxes.push({ top, bottom, type, candlesInRange, score, density, poc });
   }
 
-  // 점수순으로 정렬
   return boxes.sort((a, b) => b.score - a.score);
 }

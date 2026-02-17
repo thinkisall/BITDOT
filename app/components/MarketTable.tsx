@@ -1,13 +1,221 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment, memo } from 'react';
 import { CoinData } from '../types/market';
+import { useBinanceAlpha } from '@/contexts/BinanceAlphaContext';
 
 type FlashDirection = 'up' | 'down';
 interface FlashState {
   bithumb?: FlashDirection;
   upbit?: FlashDirection;
 }
+
+// 모듈 레벨 순수 함수 (렌더링마다 재생성 방지)
+function formatPrice(price: number) {
+  return new Intl.NumberFormat('ko-KR').format(Math.round(price));
+}
+function formatVolume(volume: number) {
+  if (volume >= 1000000) return `${(volume / 1000000).toFixed(2)}M`;
+  if (volume >= 1000) return `${(volume / 1000).toFixed(2)}K`;
+  return volume.toFixed(2);
+}
+function formatChangeRate(rate: number) {
+  const sign = rate >= 0 ? '+' : '';
+  return `${sign}${rate.toFixed(2)}%`;
+}
+function formatPriceDiff(diff: number) {
+  if (diff === 0) return '-';
+  const sign = diff >= 0 ? '+' : '';
+  return `${sign}${formatPrice(Math.abs(diff))}`;
+}
+
+// 메모이즈된 행 컴포넌트 — flashMap 변경 시 해당 행만 재렌더링
+const CoinRow = memo(function CoinRow({
+  coin,
+  rank,
+  flash,
+  swapped,
+}: {
+  coin: CoinData;
+  rank: number;
+  flash?: FlashState;
+  swapped?: boolean;
+}) {
+  const { isAlpha: isBinanceAlpha } = useBinanceAlpha();
+
+  const fc = (exchange: 'bithumb' | 'upbit') => {
+    if (!flash) return '';
+    const dir = flash[exchange];
+    if (dir === 'up') return 'flash-up';
+    if (dir === 'down') return 'flash-down';
+    return '';
+  };
+
+  const leftExch = (swapped ? 'upbit' : 'bithumb') as 'bithumb' | 'upbit';
+  const rightExch = (swapped ? 'bithumb' : 'upbit') as 'bithumb' | 'upbit';
+  const leftData = swapped ? coin.upbit : coin.bithumb;
+  const rightData = swapped ? coin.bithumb : coin.upbit;
+
+  return (
+    <Fragment>
+      {/* Desktop Row */}
+      <tr className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors hidden sm:table-row">
+        <td className="p-4">
+          <div className="text-sm font-medium text-zinc-400">#{rank}</div>
+        </td>
+        <td className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-white">{coin.name}</div>
+                {isBinanceAlpha(coin.symbol) && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">
+                    ALPHA
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-zinc-500">{coin.symbol}</div>
+            </div>
+          </div>
+        </td>
+        {/* Left exchange */}
+        <td className={`text-right p-4 border-l border-zinc-800/50 ${fc(leftExch)}`}>
+          {leftData ? (
+            <div className="text-sm text-white font-medium">₩{formatPrice(leftData.price)}</div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        <td className={`text-right p-4 ${fc(leftExch)}`}>
+          {leftData ? (
+            <div className={`text-sm font-medium ${leftData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {formatChangeRate(leftData.changeRate)}
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        <td className="text-right p-4">
+          {leftData ? (
+            <div className="text-xs text-zinc-400">{formatVolume(leftData.volume)}</div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        {/* Right exchange */}
+        <td className={`text-right p-4 border-l border-zinc-800/50 ${fc(rightExch)}`}>
+          {rightData ? (
+            <div className="text-sm text-white font-medium">₩{formatPrice(rightData.price)}</div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        <td className={`text-right p-4 ${fc(rightExch)}`}>
+          {rightData ? (
+            <div className={`text-sm font-medium ${rightData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {formatChangeRate(rightData.changeRate)}
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        <td className="text-right p-4">
+          {rightData ? (
+            <div className="text-xs text-zinc-400">{formatVolume(rightData.volume)}</div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+        {/* Price Difference */}
+        <td className="text-right p-4 border-l border-zinc-800/50">
+          {coin.bithumb && coin.upbit ? (
+            <div className={`text-sm font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+              {formatPriceDiff(coin.priceDiff)}
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-600">-</div>
+          )}
+        </td>
+      </tr>
+
+      {/* Mobile Row */}
+      <tr className="border-b border-zinc-800 sm:hidden">
+        <td className="p-1.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+              <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+                {isBinanceAlpha(coin.symbol) && (
+                  <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">
+                    α
+                  </span>
+                )}
+              </div>
+              <div className="text-[8px] text-zinc-500">#{rank}</div>
+            </div>
+          </div>
+        </td>
+        {/* Left exchange */}
+        <td className={`text-right p-1.5 ${fc(leftExch)}`}>
+          {leftData ? (
+            <>
+              <div className="text-[11px] text-white font-medium">₩{formatPrice(leftData.price)}</div>
+              <div className={`text-[9px] font-medium ${leftData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {formatChangeRate(leftData.changeRate)}
+              </div>
+            </>
+          ) : (
+            <div className="text-[8px] text-zinc-600">-</div>
+          )}
+        </td>
+        <td className="text-center p-1.5">
+          {coin.bithumb && coin.upbit ? (
+            <div className={`text-[9px] font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+              {coin.priceDiff >= 0 ? '+' : ''}{Math.round(coin.priceDiff)}
+            </div>
+          ) : (
+            <div className="text-[8px] text-zinc-600">-</div>
+          )}
+        </td>
+        {/* Right exchange */}
+        <td className={`text-right p-1.5 ${fc(rightExch)}`}>
+          {rightData ? (
+            <>
+              <div className="text-[11px] text-white font-medium">₩{formatPrice(rightData.price)}</div>
+              <div className={`text-[9px] font-medium ${rightData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {formatChangeRate(rightData.changeRate)}
+              </div>
+            </>
+          ) : (
+            <div className="text-[8px] text-zinc-600">-</div>
+          )}
+        </td>
+        <td className="text-right p-1.5">
+          {rightData ? (
+            <div className="text-[9px] text-zinc-400">{formatVolume(rightData.volume)}</div>
+          ) : (
+            <div className="text-[8px] text-zinc-600">-</div>
+          )}
+        </td>
+      </tr>
+    </Fragment>
+  );
+}, (prev, next) =>
+  prev.rank === next.rank &&
+  prev.flash === next.flash &&
+  prev.swapped === next.swapped &&
+  prev.coin.bithumb?.price === next.coin.bithumb?.price &&
+  prev.coin.upbit?.price === next.coin.upbit?.price &&
+  prev.coin.bithumb?.changeRate === next.coin.bithumb?.changeRate &&
+  prev.coin.upbit?.changeRate === next.coin.upbit?.changeRate &&
+  prev.coin.priceDiff === next.coin.priceDiff
+);
 
 interface MarketTableProps {
   data: CoinData[];
@@ -19,7 +227,7 @@ const ITEMS_PER_PAGE = 20;
 export default function MarketTable({ data, isConnected }: MarketTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [binanceAlphaSymbols, setBinanceAlphaSymbols] = useState<string[]>([]);
+  const [swapped, setSwapped] = useState(false);
   const tableTopRef = useRef<HTMLDivElement>(null);
   const prevPricesRef = useRef<Map<string, { bithumb: number; upbit: number }>>(new Map());
   const [flashMap, setFlashMap] = useState<Map<string, FlashState>>(new Map());
@@ -79,15 +287,6 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
     }
   }, [data]);
 
-  const getFlashClass = useCallback((symbol: string, exchange: 'bithumb' | 'upbit') => {
-    const flash = flashMap.get(symbol);
-    if (!flash) return '';
-    const dir = flash[exchange];
-    if (dir === 'up') return 'flash-up';
-    if (dir === 'down') return 'flash-down';
-    return '';
-  }, [flashMap]);
-
   // Filter data based on search query
   const filteredData = searchQuery
     ? data.filter(coin =>
@@ -96,21 +295,12 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
       )
     : data;
 
-  // Fetch Binance Alpha symbols
-  useEffect(() => {
-    const fetchBinanceAlpha = async () => {
-      try {
-        const response = await fetch('/api/binance-alpha');
-        const result = await response.json();
-        if (result.symbols) {
-          setBinanceAlphaSymbols(result.symbols);
-        }
-      } catch (error) {
-        console.error('Failed to fetch Binance Alpha symbols:', error);
-      }
-    };
-    fetchBinanceAlpha();
-  }, []);
+  // rank Map 사전 계산 — O(n²) getRank 제거
+  const rankMap = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((coin, idx) => map.set(coin.symbol, idx + 1));
+    return map;
+  }, [data]);
 
   // Reset to page 1 when search query or data changes
   useEffect(() => {
@@ -132,49 +322,16 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
     }
   }, [currentPage]);
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('ko-KR').format(Math.round(price));
-  };
-
-  const formatVolume = (volume: number) => {
-    if (volume >= 1000000) {
-      return `${(volume / 1000000).toFixed(2)}M`;
-    } else if (volume >= 1000) {
-      return `${(volume / 1000).toFixed(2)}K`;
-    }
-    return volume.toFixed(2);
-  };
-
-  const formatChangeRate = (rate: number) => {
-    const sign = rate >= 0 ? '+' : '';
-    return `${sign}${rate.toFixed(2)}%`;
-  };
-
-  const formatPriceDiff = (diff: number) => {
-    if (diff === 0) return '-';
-    const sign = diff >= 0 ? '+' : '';
-    return `${sign}${formatPrice(Math.abs(diff))}`;
-  };
-
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentData = filteredData.slice(startIndex, endIndex);
 
-  // Calculate rank based on original data position
-  const getRank = (coin: CoinData) => {
-    return data.findIndex(c => c.symbol === coin.symbol) + 1;
-  };
+  const getRank = (coin: CoinData) => rankMap.get(coin.symbol) ?? 0;
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
-  };
-
-  // Check if coin is in Binance Alpha
-  const isBinanceAlpha = (coinSymbol: string) => {
-    const normalized = coinSymbol.toUpperCase();
-    return binanceAlphaSymbols.some(symbol => symbol.toUpperCase() === normalized);
   };
 
   const getPageNumbers = () => {
@@ -224,14 +381,21 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
             </span>
           </div>
         </div>
-        <div className="flex gap-2 text-[10px] sm:text-xs">
+        <div className="flex items-center gap-2 text-[10px] sm:text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
-            <span className="text-zinc-400">빗썸</span>
+            <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+            <span className="text-zinc-400">{swapped ? '업비트' : '빗썸'}</span>
           </div>
+          <button
+            onClick={() => setSwapped(v => !v)}
+            className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+            title="거래소 순서 바꾸기"
+          >
+            ⇄
+          </button>
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-purple-500"></div>
-            <span className="text-zinc-400">업비트</span>
+            <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+            <span className="text-zinc-400">{swapped ? '빗썸' : '업비트'}</span>
           </div>
         </div>
       </div>
@@ -281,14 +445,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
               <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>코인</th>
               <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
                 <div className="flex items-center justify-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  빗썸
+                  <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                  {swapped ? '업비트' : '빗썸'}
                 </div>
               </th>
               <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
                 <div className="flex items-center justify-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                  업비트
+                  <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                  {swapped ? '빗썸' : '업비트'}
                 </div>
               </th>
               <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" rowSpan={2}>차액</th>
@@ -307,14 +471,14 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
               <th className="text-left text-[9px] text-zinc-500 font-medium p-1.5">코인</th>
               <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
                 <div className="flex items-center justify-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  빗썸
+                  <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                  {swapped ? '업비트' : '빗썸'}
                 </div>
               </th>
               <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
                 <div className="flex items-center justify-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                  업비트
+                  <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                  {swapped ? '빗썸' : '업비트'}
                 </div>
               </th>
             </tr>
@@ -322,155 +486,13 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
             <tbody>
               {currentData.length > 0 ? (
                 currentData.map((coin) => (
-                  <Fragment key={coin.symbol}>
-                    {/* Desktop Row */}
-                    <tr key={`${coin.symbol}-desktop`} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors hidden sm:table-row">
-                      <td className="p-4">
-                        <div className="text-sm font-medium text-zinc-400">#{getRank(coin)}</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-                            <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <div className="text-sm font-medium text-white">{coin.name}</div>
-                              {isBinanceAlpha(coin.symbol) && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">
-                                  ALPHA
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-zinc-500">{coin.symbol}</div>
-                          </div>
-                        </div>
-                      </td>
-                      {/* Bithumb */}
-                      <td className={`text-right p-4 border-l border-zinc-800/50 ${getFlashClass(coin.symbol, 'bithumb')}`}>
-                        {coin.bithumb ? (
-                          <div className="text-sm text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className={`text-right p-4 ${getFlashClass(coin.symbol, 'bithumb')}`}>
-                        {coin.bithumb ? (
-                          <div className={`text-sm font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {formatChangeRate(coin.bithumb.changeRate)}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className="text-right p-4">
-                        {coin.bithumb ? (
-                          <div className="text-xs text-zinc-400">{formatVolume(coin.bithumb.volume)}</div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      {/* Upbit */}
-                      <td className={`text-right p-4 border-l border-zinc-800/50 ${getFlashClass(coin.symbol, 'upbit')}`}>
-                        {coin.upbit ? (
-                          <div className="text-sm text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className={`text-right p-4 ${getFlashClass(coin.symbol, 'upbit')}`}>
-                        {coin.upbit ? (
-                          <div className={`text-sm font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {formatChangeRate(coin.upbit.changeRate)}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className="text-right p-4">
-                        {coin.upbit ? (
-                          <div className="text-xs text-zinc-400">{formatVolume(coin.upbit.volume)}</div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                      {/* Price Difference */}
-                      <td className="text-right p-4 border-l border-zinc-800/50">
-                        {coin.bithumb && coin.upbit ? (
-                          <div className={`text-sm font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-                            {formatPriceDiff(coin.priceDiff)}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-zinc-600">-</div>
-                        )}
-                      </td>
-                    </tr>
-
-                    {/* Mobile Row */}
-                    <tr key={`${coin.symbol}-mobile`} className="border-b border-zinc-800 sm:hidden">
-                      {/* Coin Info */}
-                      <td className="p-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-                            <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1">
-                              <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
-                              {isBinanceAlpha(coin.symbol) && (
-                                <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">
-                                  α
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[8px] text-zinc-500">#{getRank(coin)}</div>
-                          </div>
-                        </div>
-                      </td>
-                      {/* Bithumb */}
-                      <td className={`text-right p-1.5 ${getFlashClass(coin.symbol, 'bithumb')}`}>
-                        {coin.bithumb ? (
-                          <>
-                            <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.bithumb.price)}</div>
-                            <div className={`text-[9px] font-medium ${coin.bithumb.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                              {formatChangeRate(coin.bithumb.changeRate)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-[8px] text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className="text-center p-1.5">
-                        {coin.bithumb && coin.upbit ? (
-                          <div className={`text-[9px] font-medium ${coin.priceDiff >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-                            {coin.priceDiff >= 0 ? '+' : ''}{Math.round(coin.priceDiff)}
-                          </div>
-                        ) : (
-                          <div className="text-[8px] text-zinc-600">-</div>
-                        )}
-                      </td>
-                      {/* Upbit */}
-                      <td className={`text-right p-1.5 ${getFlashClass(coin.symbol, 'upbit')}`}>
-                        {coin.upbit ? (
-                          <>
-                            <div className="text-[11px] text-white font-medium">₩{formatPrice(coin.upbit.price)}</div>
-                            <div className={`text-[9px] font-medium ${coin.upbit.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                              {formatChangeRate(coin.upbit.changeRate)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-[8px] text-zinc-600">-</div>
-                        )}
-                      </td>
-                      <td className="text-right p-1.5">
-                        {coin.upbit ? (
-                          <div className="text-[9px] text-zinc-400">{formatVolume(coin.upbit.volume)}</div>
-                        ) : (
-                          <div className="text-[8px] text-zinc-600">-</div>
-                        )}
-                      </td>
-                    </tr>
-                  </Fragment>
+                  <CoinRow
+                    key={coin.symbol}
+                    coin={coin}
+                    rank={getRank(coin)}
+                    flash={flashMap.get(coin.symbol)}
+                    swapped={swapped}
+                  />
                 ))
               ) : (
                 <tr>

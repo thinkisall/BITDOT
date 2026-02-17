@@ -5,21 +5,19 @@ import { createClient } from '@supabase/supabase-js';
 // 관리자 이메일 목록 (환경 변수로 관리)
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
-// 서비스 역할 키로 Supabase 클라이언트 생성 (RLS 우회)
+// 서비스 역할 키로 Supabase 클라이언트 — 모듈 스코프에서 1회 생성 (요청마다 재생성 방지)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabaseAdmin = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
 const getSupabaseAdmin = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase URL or Service Role Key is missing');
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  if (!supabaseAdmin) throw new Error('Supabase URL or Service Role Key is missing');
+  return supabaseAdmin;
 };
 
 // GET - 모든 유저 조회

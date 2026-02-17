@@ -17,6 +17,7 @@ interface MultiTimeframeChartModalProps {
   symbol: string;
   exchange: 'upbit' | 'bithumb';
   timeframes: {
+    '5m': TimeframeBoxInfo;
     '30m': TimeframeBoxInfo;
     '1h': TimeframeBoxInfo;
     '4h': TimeframeBoxInfo;
@@ -24,9 +25,10 @@ interface MultiTimeframeChartModalProps {
   };
 }
 
-type TimeframeKey = '30m' | '1h' | '4h' | '1d';
+type TimeframeKey = '5m' | '30m' | '1h' | '4h' | '1d';
 
 const TIMEFRAME_LABELS = {
+  '5m': '5분봉',
   '30m': '30분봉',
   '1h': '1시간봉',
   '4h': '4시간봉',
@@ -69,6 +71,13 @@ export default function MultiTimeframeChartModal({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const isCreatingChart = useRef(false);
+  // 탭별 API 응답 캐시 — 같은 종목에서 탭 전환 시 재fetch 방지
+  const dataCache = useRef<Partial<Record<TimeframeKey, any>>>({});
+
+  // symbol/exchange가 바뀌면 캐시 초기화
+  useEffect(() => {
+    dataCache.current = {};
+  }, [symbol, exchange]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,19 +100,47 @@ export default function MultiTimeframeChartModal({
 
       try {
         setError(null);
-        setIsLoading(true);
 
-        // API에서 해당 시간대 캔들 데이터 가져오기
-        const response = await fetch(
-          `/api/chart?symbol=${symbol}&exchange=${exchange}&timeframe=${activeTimeframe}`
-        );
+        // 캐시 HIT → 로딩 스피너 없이 즉시 차트 렌더링
+        let data = dataCache.current[activeTimeframe];
+        if (!data) {
+          setIsLoading(true);
 
-        const data = await response.json();
+          // 429 대비 재시도 로직 (최대 3회, 지수 백오프)
+          const MAX_RETRIES = 3;
+          let lastError: Error | null = null;
 
-        if (!response.ok || data.error) {
-          const errorMsg = data.error || '차트 데이터를 불러오는데 실패했습니다.';
-          console.error('Chart API error:', errorMsg, { symbol, exchange, timeframe: activeTimeframe });
-          throw new Error(errorMsg);
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+              const delay = attempt * 2000; // 2초, 4초
+              setError(`요청이 너무 많습니다. ${delay / 1000}초 후 재시도합니다... (${attempt}/${MAX_RETRIES - 1})`);
+              await new Promise((res) => setTimeout(res, delay));
+              setError(null);
+            }
+
+            const response = await fetch(
+              `/api/chart?symbol=${symbol}&exchange=${exchange}&timeframe=${activeTimeframe}`
+            );
+            data = await response.json();
+
+            if (response.status === 429) {
+              lastError = new Error('요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (429)');
+              continue; // 재시도
+            }
+
+            if (!response.ok || data.error) {
+              const errorMsg = data.error || '차트 데이터를 불러오는데 실패했습니다.';
+              throw new Error(errorMsg);
+            }
+
+            lastError = null;
+            break; // 성공
+          }
+
+          if (lastError) throw lastError;
+
+          // 성공 시 캐시에 저장
+          dataCache.current[activeTimeframe] = data;
         }
 
         if (!data.candles || data.candles.length === 0) {
@@ -150,7 +187,7 @@ export default function MultiTimeframeChartModal({
 
         candlestickSeries.setData(data.candles);
 
-        // 현재가와 MA50 값 저장 (매수 시그널 판단용)
+        // 현재가와 MA값 저장 (매수 시그널 판단용)
         const currentPrice = data.candles[data.candles.length - 1]?.close;
         const ma50Value = data.sma50?.[data.sma50.length - 1]?.value;
         if (currentPrice && ma50Value) {

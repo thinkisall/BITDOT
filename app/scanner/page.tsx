@@ -1,8 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import Header from '../components/Header';
-import BoxChartModal from '../components/BoxChartModal';
+
+// lightweight-charts를 포함한 모달 lazy load — 초기 번들에서 제외
+const BoxChartModal = dynamic(
+  () => import('../components/BoxChartModal'),
+  { ssr: false }
+);
 
 interface ScanResult {
   symbol: string;

@@ -41,6 +41,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'users' | 'premium-requests'>('users');
   const [premiumRequests, setPremiumRequests] = useState<PremiumRequestData[]>([]);
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const isAdmin = user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -77,6 +79,7 @@ export default function AdminPage() {
 
       const data = await response.json();
       setUsers(data.users || []);
+      setCurrentPage(1); // 새로고침 시 1페이지로 리셋
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -263,7 +266,7 @@ export default function AdminPage() {
               </button>
             </div>
             <p className="text-sm text-zinc-400 mt-1">
-              총 {users.length}명의 유저
+              총 {users.length}명 · {Math.ceil(users.length / PAGE_SIZE)}페이지
             </p>
           </div>
 
@@ -280,7 +283,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((userData) => (
+                {users.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((userData) => (
                   <tr
                     key={userData.uid}
                     className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
@@ -383,6 +386,69 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+
+          {/* 페이지네이션 */}
+          {users.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
+              <p className="text-xs text-zinc-500">
+                {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, users.length)} / {users.length}명
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: Math.ceil(users.length / PAGE_SIZE) }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === Math.ceil(users.length / PAGE_SIZE) || Math.abs(p - currentPage) <= 2)
+                  .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-zinc-600">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => setCurrentPage(item as number)}
+                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                          currentPage === item
+                            ? 'bg-yellow-500 text-black font-bold'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                <button
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  disabled={currentPage === Math.ceil(users.length / PAGE_SIZE)}
+                  className="px-2 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ›
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.ceil(users.length / PAGE_SIZE))}
+                  disabled={currentPage === Math.ceil(users.length / PAGE_SIZE)}
+                  className="px-2 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         )}
 

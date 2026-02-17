@@ -1,11 +1,13 @@
 // app/api/chart/route.ts
 import {
+  fetchUpbitCandles5M,
   fetchUpbitCandles30M,
   fetchUpbitCandles,
   fetchUpbitCandles4H,
   fetchUpbitCandles1D
 } from "@/lib/upbitCandles";
 import {
+  fetchBithumbCandles5M,
   fetchBithumbCandles30M,
   fetchBithumbCandles,
   fetchBithumbCandles4H,
@@ -29,6 +31,9 @@ export async function GET(req: Request) {
     if (exchange === 'upbit') {
       const market = `KRW-${symbol}`;
       switch (timeframe) {
+        case '5m':
+          candles = await fetchUpbitCandles5M(market, 250);
+          break;
         case '30m':
           candles = await fetchUpbitCandles30M(market, 250);
           break;
@@ -43,6 +48,9 @@ export async function GET(req: Request) {
       }
     } else {
       switch (timeframe) {
+        case '5m':
+          candles = await fetchBithumbCandles5M(symbol, 250);
+          break;
         case '30m':
           candles = await fetchBithumbCandles30M(symbol, 250);
           break;
@@ -103,12 +111,21 @@ export async function GET(req: Request) {
       lower: value.lower,
     }));
 
-    return Response.json({
+    // 타임프레임별 캐시 TTL (캔들 주기에 맞춤)
+    const ttlMap: Record<string, number> = { '5m': 300, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400 };
+    const ttl = ttlMap[timeframe] || 3600;
+
+    return new Response(JSON.stringify({
       candles: chartCandles,
       sma50: sma50Data,
       sma110: sma110Data,
       sma180: sma180Data,
       bollingerBands: bollingerBands,
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`,
+      },
     });
   } catch (error: any) {
     console.error('Chart API error:', error);

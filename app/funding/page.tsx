@@ -21,60 +21,6 @@ interface FundingResponse {
 type ExchangeFilter = 'all' | 'binance' | 'bybit' | 'okx';
 type SortType = 'highest' | 'lowest' | 'positive' | 'negative';
 
-// 브라우저에서 직접 Binance API 호출
-async function fetchBinanceFunding(): Promise<FundingData[]> {
-  try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex');
-    const data = await response.json();
-
-    return data
-      .filter((item: any) => item.symbol.endsWith('USDT'))
-      .map((item: any) => {
-        const fundingRate = parseFloat(item.lastFundingRate || '0');
-        return {
-          symbol: item.symbol.replace('USDT', ''),
-          exchange: 'binance' as const,
-          fundingRate,
-          fundingRatePercent: fundingRate * 100,
-          nextFundingTime: parseInt(item.nextFundingTime || '0'),
-          markPrice: parseFloat(item.markPrice || '0'),
-        };
-      });
-  } catch (error) {
-    console.error('Binance funding error:', error);
-    return [];
-  }
-}
-
-// 브라우저에서 직접 Bybit API 호출
-async function fetchBybitFunding(): Promise<FundingData[]> {
-  try {
-    const response = await fetch('https://api.bybit.com/v5/market/tickers?category=linear');
-    const data = await response.json();
-
-    if (data.retCode !== 0 || !data.result?.list) {
-      console.error('Bybit API error:', data);
-      return [];
-    }
-
-    return data.result.list
-      .filter((item: any) => item.symbol.endsWith('USDT'))
-      .map((item: any) => {
-        const fundingRate = parseFloat(item.fundingRate || '0');
-        return {
-          symbol: item.symbol.replace('USDT', ''),
-          exchange: 'bybit' as const,
-          fundingRate,
-          fundingRatePercent: fundingRate * 100,
-          nextFundingTime: parseInt(item.nextFundingTime || '0'),
-          markPrice: parseFloat(item.markPrice || '0'),
-        };
-      });
-  } catch (error) {
-    console.error('Bybit funding error:', error);
-    return [];
-  }
-}
 
 export default function FundingPage() {
   const [fundingData, setFundingData] = useState<FundingResponse | null>(null);
@@ -99,17 +45,17 @@ export default function FundingPage() {
       setIsLoading(true);
       setError(null);
 
-      const [binanceData, bybitData] = await Promise.all([
-        fetchBinanceFunding(),
-        fetchBybitFunding(),
-      ]);
+      // 서버 라우트를 통해 호출 — CORS 없이 서버 측 캐싱 활용
+      const response = await fetch('/api/funding');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
 
-      const allData = [...binanceData, ...bybitData];
+      const allData: FundingData[] = result.data ?? [];
       allData.sort((a, b) => Math.abs(b.fundingRate) - Math.abs(a.fundingRate));
 
       setFundingData({
         data: allData,
-        timestamp: Date.now(),
+        timestamp: result.timestamp ?? Date.now(),
         count: allData.length,
       });
     } catch (err: any) {

@@ -2,9 +2,16 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import Header from '../components/Header';
-import MultiTimeframeChartModal from '../components/MultiTimeframeChartModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBinanceAlpha } from '@/contexts/BinanceAlphaContext';
+
+// lightweight-charts를 포함한 모달을 lazy load — 초기 번들에서 제외
+const MultiTimeframeChartModal = dynamic(
+  () => import('../components/MultiTimeframeChartModal'),
+  { ssr: false }
+);
 
 interface TimeframeBoxInfo {
   hasBox: boolean;
@@ -30,6 +37,7 @@ interface MultiTimeframeResult {
   volume: number;
   currentPrice: number;
   timeframes: {
+    '5m': TimeframeBoxInfo;
     '30m': TimeframeBoxInfo;
     '1h': TimeframeBoxInfo;
     '4h': TimeframeBoxInfo;
@@ -59,13 +67,13 @@ interface AnalysisResponse {
 
 export default function AnalysisPage() {
   const { user, isPremium } = useAuth();
+  const { isAlpha: isBinanceAlpha } = useBinanceAlpha(); // Context에서 가져오기 (중복 fetch 제거)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCoin, setSelectedCoin] = useState<MultiTimeframeResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [binanceAlphaSymbols, setBinanceAlphaSymbols] = useState<string[]>([]);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const ITEMS_PER_PAGE = 20;
@@ -73,22 +81,6 @@ export default function AnalysisPage() {
 
   // 항상 상대 경로 사용 (Vercel에서는 rewrite로 터널 프록시, 로컬에서는 Next.js API 직접)
   const ANALYSIS_URL = '/api/multi-timeframe';
-
-  // Fetch Binance Alpha symbols
-  useEffect(() => {
-    const fetchBinanceAlpha = async () => {
-      try {
-        const response = await fetch('/api/binance-alpha');
-        const result = await response.json();
-        if (result.symbols) {
-          setBinanceAlphaSymbols(result.symbols);
-        }
-      } catch (error) {
-        console.error('Failed to fetch Binance Alpha symbols:', error);
-      }
-    };
-    fetchBinanceAlpha();
-  }, []);
 
   // 페이지 마운트 시 자동으로 데이터 가져오기
   useEffect(() => {
@@ -116,24 +108,24 @@ export default function AnalysisPage() {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // 자동 갱신 (캐시 없거나 분석 중일 때 10초마다 폴링)
+  // 자동 갱신: 탭 활성 시 10초, 백그라운드 시 60초 (Visibility API)
   useEffect(() => {
-    // 캐시가 없거나 분석 중이면 자동 갱신
     const shouldAutoRefresh = results && (
-      results.totalAnalyzed === 0 || // 캐시 없음
-      results.analyzing || // 분석 중
-      results.stale // stale 상태
+      results.totalAnalyzed === 0 ||
+      results.analyzing ||
+      results.stale
     );
 
     if (!shouldAutoRefresh) return;
 
-    const interval = setInterval(async () => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const doFetch = async () => {
       try {
         const response = await fetch(ANALYSIS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
-
         if (response.ok) {
           const data: AnalysisResponse = await response.json();
           setResults(data);
@@ -141,10 +133,22 @@ export default function AnalysisPage() {
       } catch (e) {
         console.error('Auto-refresh failed:', e);
       }
-    }, 10000); // 10초마다
+    };
 
-    return () => clearInterval(interval);
-  }, [results?.totalAnalyzed, results?.analyzing, results?.stale]);
+    const startInterval = () => {
+      if (intervalId) clearInterval(intervalId);
+      const ms = document.visibilityState === 'visible' ? 10_000 : 60_000;
+      intervalId = setInterval(doFetch, ms);
+    };
+
+    startInterval();
+    document.addEventListener('visibilitychange', startInterval);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', startInterval);
+    };
+  }, [results?.totalAnalyzed, results?.analyzing, results?.stale, ANALYSIS_URL]);
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -227,11 +231,6 @@ export default function AnalysisPage() {
     }
   };
 
-  // Check if coin is in Binance Alpha
-  const isBinanceAlpha = (coinSymbol: string) => {
-    const normalized = coinSymbol.toUpperCase();
-    return binanceAlphaSymbols.some(symbol => symbol.toUpperCase() === normalized);
-  };
 
   // 검색 필터링
   const filteredResults = results?.results.filter(result =>
@@ -489,6 +488,7 @@ export default function AnalysisPage() {
                     <thead>
                       <tr className="border-b border-zinc-800 bg-zinc-900/50">
                         <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">종목</th>
+                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">5분</th>
                         <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">30분</th>
                         <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">1시간</th>
                         <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">4시간</th>
@@ -540,7 +540,7 @@ export default function AnalysisPage() {
                       >
                         <td className="p-2 sm:p-4">
                           <div className="flex items-center gap-1.5 sm:gap-3">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
                               <span className="text-[9px] sm:text-xs font-bold text-yellow-500">
                                 {result.symbol.slice(0, 2)}
                               </span>
@@ -553,22 +553,12 @@ export default function AnalysisPage() {
                                     ALPHA
                                   </span>
                                 )}
-                                {result.allTimeframes && (
-                                  <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold whitespace-nowrap">
-                                    전체
-                                  </span>
-                                )}
-                                {result.boxCount === 3 && (
-                                  <span className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold whitespace-nowrap">
-                                    3개
-                                  </span>
-                                )}
                                 {result.volumeSpike && (
                                   <span
                                     className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold whitespace-nowrap"
-                                    title={`${result.volumeSpike.ratio}배 급증 (${result.volumeSpike.timeAgo})`}
+                                    title={`거래량 ${result.volumeSpike.ratio}배 급증`}
                                   >
-                                    🔥 {result.volumeSpike.timeAgo}
+                                    🔥 급증
                                   </span>
                                 )}
                                 {result.watchlist && (
@@ -588,6 +578,18 @@ export default function AnalysisPage() {
                         </td>
 
                         {/* Timeframe indicators */}
+                        <td className="text-center p-2 sm:p-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['5m'])} text-xs sm:text-sm font-bold`}>
+                              {getTimeframeIcon(result.timeframes['5m'])}
+                            </div>
+                            {result.timeframes['5m'].hasBox && result.timeframes['5m'].position && (
+                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['5m'].position)}`}>
+                                {getPositionLabel(result.timeframes['5m'].position)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="text-center p-2 sm:p-4">
                           <div className="flex flex-col items-center gap-1">
                             <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['30m'])} text-xs sm:text-sm font-bold`}>
@@ -759,7 +761,7 @@ export default function AnalysisPage() {
           }`}>
             {isPremium ? (
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
                     <svg className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -835,7 +837,7 @@ export default function AnalysisPage() {
                 </ul>
               </div>
 
-              <div>
+<div>
                 <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">가격 위치:</p>
                 <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
                   <li>• <span className="text-red-400">돌파</span>: 박스권 상단 돌파 (3% 이상)</li>

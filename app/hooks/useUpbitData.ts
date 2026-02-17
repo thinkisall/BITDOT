@@ -9,17 +9,20 @@ export function useUpbitData() {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // 200ms 배치 처리용 버퍼
+  const pendingUpdates = useRef<Map<string, UpbitTicker>>(new Map());
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 지수 백오프 재연결용
+  const reconnectAttempts = useRef(0);
+
   useEffect(() => {
-    // Fetch market list
     const fetchMarkets = async () => {
       try {
         const response = await fetch('https://api.upbit.com/v1/market/all');
         const allMarkets: UpbitMarket[] = await response.json();
-
-        // Filter only KRW markets
         const krwMarkets = allMarkets.filter(m => m.market.startsWith('KRW-'));
         setMarkets(krwMarkets);
-
         return krwMarkets;
       } catch (error) {
         console.error('Upbit market fetch error:', error);
@@ -27,7 +30,6 @@ export function useUpbitData() {
       }
     };
 
-    // Fetch initial ticker data
     const fetchInitialTickers = async (marketList: UpbitMarket[]) => {
       try {
         const marketCodes = marketList.map(m => m.market).join(',');
@@ -36,7 +38,6 @@ export function useUpbitData() {
 
         const tickerMap = new Map<string, UpbitTicker>();
         tickers.forEach(ticker => {
-          // REST API uses 'market' field
           const marketCode = ticker.market || ticker.code;
           if (marketCode) {
             const symbol = marketCode.replace('KRW-', '');
@@ -50,16 +51,20 @@ export function useUpbitData() {
       }
     };
 
-    // Connect to WebSocket
     const connectWebSocket = (marketList: UpbitMarket[]) => {
+      // 이미 열려있는 소켓이 있으면 닫기
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+
       const ws = new WebSocket('wss://api.upbit.com/websocket/v1');
       wsRef.current = ws;
 
       ws.onopen = () => {
         console.log('Upbit WebSocket connected');
+        reconnectAttempts.current = 0; // 성공 시 카운터 리셋
         setIsConnected(true);
 
-        // Subscribe to all KRW markets
         const subscribeMessage = [
           { ticket: 'bitdot' },
           {
@@ -77,11 +82,27 @@ export function useUpbitData() {
         const ticker: UpbitTicker = JSON.parse(text);
 
         if (ticker.type === 'ticker') {
-          // WebSocket uses 'code' field
           const marketCode = ticker.code || ticker.market;
           if (marketCode) {
             const symbol = marketCode.replace('KRW-', '');
-            setData(prev => new Map(prev).set(symbol, ticker));
+
+            // 버퍼에 적재
+            pendingUpdates.current.set(symbol, ticker);
+
+            // 타이머가 없으면 200ms 뒤 일괄 flush
+            if (!flushTimer.current) {
+              flushTimer.current = setTimeout(() => {
+                const batch = new Map(pendingUpdates.current);
+                pendingUpdates.current.clear();
+                flushTimer.current = null;
+
+                setData(prev => {
+                  const next = new Map(prev);
+                  batch.forEach((v, k) => next.set(k, v));
+                  return next;
+                });
+              }, 200);
+            }
           }
         }
       };
@@ -95,16 +116,23 @@ export function useUpbitData() {
         console.log('Upbit WebSocket disconnected');
         setIsConnected(false);
 
-        // Reconnect after 5 seconds
+        if (flushTimer.current) {
+          clearTimeout(flushTimer.current);
+          flushTimer.current = null;
+        }
+
+        // 지수 백오프: 1s → 2s → 4s → 8s → 16s → 30s(max)
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+        reconnectAttempts.current++;
+
         setTimeout(() => {
           if (marketList.length > 0) {
             connectWebSocket(marketList);
           }
-        }, 5000);
+        }, delay);
       };
     };
 
-    // Initialize
     const initialize = async () => {
       const marketList = await fetchMarkets();
       if (marketList.length > 0) {
@@ -116,6 +144,10 @@ export function useUpbitData() {
     initialize();
 
     return () => {
+      if (flushTimer.current) {
+        clearTimeout(flushTimer.current);
+        flushTimer.current = null;
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }

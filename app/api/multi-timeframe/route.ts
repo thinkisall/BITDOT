@@ -1,15 +1,54 @@
 // app/api/multi-timeframe/route.ts
-import { fetchUpbitCandles30M, fetchUpbitCandles, fetchUpbitCandles4H, fetchUpbitCandles1D } from "@/lib/upbitCandles";
-import { fetchBithumbCandles30M, fetchBithumbCandles, fetchBithumbCandles4H, fetchBithumbCandles1D } from "@/lib/bithumbCandles";
+import { fetchUpbitCandles5M, fetchUpbitCandles30M, fetchUpbitCandles, fetchUpbitCandles4H, fetchUpbitCandles1D } from "@/lib/upbitCandles";
+import { fetchBithumbCandles5M, fetchBithumbCandles30M, fetchBithumbCandles, fetchBithumbCandles4H, fetchBithumbCandles1D } from "@/lib/bithumbCandles";
 import { findSupportResistanceLevels, detectBoxRanges } from "@/lib/supportResistance";
+import { fetchAllMarkets } from "@/lib/markets";
 
-// 메이저 코인 리스트 (제외할 코인들)
-const MAJOR_COINS = new Set([
-  'BTC', 'ETH', 'XRP', 'USDT', 'USDC', 'BNB', 'SOL', 'ADA', 'DOGE', 'TRX',
-  'DOT', 'MATIC', 'AVAX', 'LINK', 'UNI', 'ATOM', 'LTC', 'BCH', 'ETC', 'XLM'
-]);
+// ─── Token Bucket Rate Limiter ───────────────────────────────────────────────
+// API 레이트 리밋을 초과하지 않으면서 최대한 빠르게 요청
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
 
-// 캐시 저장소 (메모리)
+  constructor(
+    private readonly capacity: number,
+    private readonly refillPerSecond: number
+  ) {
+    this.tokens = capacity;
+    this.lastRefill = Date.now();
+  }
+
+  async consume(): Promise<void> {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillPerSecond);
+    this.lastRefill = now;
+
+    if (this.tokens < 1) {
+      const waitMs = ((1 - this.tokens) / this.refillPerSecond) * 1000;
+      await new Promise(r => setTimeout(r, Math.ceil(waitMs)));
+      this.tokens = 0;
+    } else {
+      this.tokens -= 1;
+    }
+  }
+}
+
+// 업비트: 최대 2 심볼/초 (= 10 API호출/초, 리밋 내)
+// 빗썸:  최대 3 심볼/초 (= 15 API호출/초, 리밋 내)
+const upbitBucket = new TokenBucket(2, 2);
+const bithumbBucket = new TokenBucket(3, 3);
+
+// ─── 심볼별 결과 캐시 (25분 TTL) ─────────────────────────────────────────────
+// 매 5분 주기에서 캐시가 살아있는 종목은 API 호출 없이 이전 결과 재사용
+interface SymbolCacheEntry {
+  result: MultiTimeframeResult;
+  timestamp: number;
+}
+const symbolCache = new Map<string, SymbolCacheEntry>();
+const SYMBOL_CACHE_TTL = 25 * 60 * 1000; // 25분
+
+// ─── 전체 결과 캐시 ───────────────────────────────────────────────────────────
 let cachedResults: {
   results: MultiTimeframeResult[];
   totalAnalyzed: number;
@@ -20,13 +59,6 @@ let cachedResults: {
 let isAnalyzing = false; // 분석 진행 중 플래그
 let backgroundWorkerStarted = false; // 백그라운드 워커 시작 플래그
 const ANALYSIS_INTERVAL = 5 * 60 * 1000; // 5분마다 분석
-
-interface MarketWithVolume {
-  symbol: string;
-  market: string;
-  volume: number;
-  exchange: 'upbit' | 'bithumb';
-}
 
 interface TimeframeBoxInfo {
   hasBox: boolean;
@@ -52,6 +84,7 @@ interface MultiTimeframeResult {
   volume: number;
   currentPrice: number;
   timeframes: {
+    '5m': TimeframeBoxInfo;
     '30m': TimeframeBoxInfo;
     '1h': TimeframeBoxInfo;
     '4h': TimeframeBoxInfo;
@@ -159,84 +192,60 @@ async function performAnalysis() {
   try {
     isAnalyzing = true;
     console.log('Starting multi-timeframe analysis...');
-    // 1. 업비트 마켓 데이터 가져오기
-    const upbitMarketsRes = await fetch('https://api.upbit.com/v1/market/all');
-    const upbitMarkets = await upbitMarketsRes.json();
-    const krwMarkets = upbitMarkets.filter((m: any) => m.market.startsWith('KRW-'));
-
-    // 2. 업비트 티커 데이터로 거래량 가져오기
-    const marketCodes = krwMarkets.map((m: any) => m.market).join(',');
-    const upbitTickerRes = await fetch(`https://api.upbit.com/v1/ticker?markets=${marketCodes}`);
-    const upbitTickers = await upbitTickerRes.json();
-
-    // 3. 빗썸 티커 데이터 가져오기
-    const bithumbRes = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW');
-    const bithumbData = await bithumbRes.json();
-
-    const marketsWithVolume: MarketWithVolume[] = [];
-    const upbitSymbols = new Set<string>(); // 업비트 종목 추적
-
-    // 업비트 데이터 처리
-    upbitTickers.forEach((ticker: any) => {
-      const symbol = ticker.market.replace('KRW-', '');
-      if (!MAJOR_COINS.has(symbol)) {
-        upbitSymbols.add(symbol); // 업비트 종목 기록
-        marketsWithVolume.push({
-          symbol,
-          market: ticker.market,
-          volume: ticker.acc_trade_price_24h,
-          exchange: 'upbit',
-        });
-      }
-    });
-
-    // 빗썸 데이터 처리 (업비트에 없는 종목만 추가)
-    if (bithumbData.status === '0000' && bithumbData.data) {
-      Object.entries(bithumbData.data).forEach(([symbol, ticker]: [string, any]) => {
-        if (symbol !== 'date' && !MAJOR_COINS.has(symbol) && !upbitSymbols.has(symbol)) {
-          // 업비트에 없는 종목만 추가
-          marketsWithVolume.push({
-            symbol,
-            market: symbol,
-            volume: Number(ticker.acc_trade_value_24H || 0),
-            exchange: 'bithumb',
-          });
-        }
-      });
-    }
-
-    // 4. 거래량 순으로 정렬 (전체 종목)
-    const allMarkets = marketsWithVolume.sort((a, b) => b.volume - a.volume);
+    // 마켓 목록 (5분 캐시, scan/multi-timeframe 공유)
+    const allMarkets = await fetchAllMarkets();
 
     // 디버깅: 업비트와 빗썸 종목 수 확인
     const upbitCount = allMarkets.filter(m => m.exchange === 'upbit').length;
     const bithumbCount = allMarkets.filter(m => m.exchange === 'bithumb').length;
     console.log(`Total markets: ${allMarkets.length} (Upbit: ${upbitCount}, Bithumb: ${bithumbCount})`);
-    console.log(`Top 5 by volume:`, allMarkets.slice(0, 5).map(m => `${m.symbol}(${m.exchange})`));
 
-    // 5. 각 종목의 모든 시간대 스캔 (배치 처리로 Rate Limit 회피)
-    const BATCH_SIZE = 3; // 한 번에 3개씩 처리 (Rate Limit 회피)
-    const DELAY_MS = 2000; // 배치 사이 2초 대기
+    // 5. 각 종목의 모든 시간대 스캔
+    // - 심볼 캐시 히트 시 API 호출 없이 이전 결과 재사용 (API 호출 ~80% 감소)
+    // - Token Bucket으로 캐시 미스 심볼만 속도 제어
+    // - BATCH_SIZE 확대: 대부분이 캐시 히트라 충분히 빠름
+    const BATCH_SIZE = 10;
+    const DELAY_MS = 100; // 캐시 히트 배치는 거의 즉시 완료되므로 짧게
     const results: MultiTimeframeResult[] = [];
+
+    let cacheHits = 0;
+    let cacheMisses = 0;
 
     for (let i = 0; i < allMarkets.length; i += BATCH_SIZE) {
       const batch = allMarkets.slice(i, i + BATCH_SIZE);
-      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allMarkets.length / BATCH_SIZE)}`);
 
       const batchResults = await Promise.all(
         batch.map(async (item) => {
         try {
-          let candles30m, candles1h, candles4h, candles1d;
+          // ─ 심볼 캐시 확인 ────────────────────────────────────────────────
+          const cacheKey = `${item.exchange}-${item.symbol}`;
+          const cached = symbolCache.get(cacheKey);
+          if (cached && Date.now() - cached.timestamp < SYMBOL_CACHE_TTL) {
+            cacheHits++;
+            return cached.result;
+          }
+          cacheMisses++;
+
+          // ─ Token Bucket: 캐시 미스 심볼만 레이트 리밋 적용 ────────────────
+          if (item.exchange === 'upbit') {
+            await upbitBucket.consume();
+          } else {
+            await bithumbBucket.consume();
+          }
+
+          let candles5m, candles30m, candles1h, candles4h, candles1d;
 
           if (item.exchange === 'upbit') {
-            [candles30m, candles1h, candles4h, candles1d] = await Promise.all([
+            [candles5m, candles30m, candles1h, candles4h, candles1d] = await Promise.all([
+              fetchUpbitCandles5M(item.market, 250),
               fetchUpbitCandles30M(item.market, 250),
               fetchUpbitCandles(item.market, 250),
               fetchUpbitCandles4H(item.market, 100),
               fetchUpbitCandles1D(item.market, 100),
             ]);
           } else {
-            [candles30m, candles1h, candles4h, candles1d] = await Promise.all([
+            [candles5m, candles30m, candles1h, candles4h, candles1d] = await Promise.all([
+              fetchBithumbCandles5M(item.symbol, 250),
               fetchBithumbCandles30M(item.symbol, 250),
               fetchBithumbCandles(item.symbol, 250),
               fetchBithumbCandles4H(item.symbol, 100),
@@ -315,6 +324,7 @@ async function performAnalysis() {
 
           // 각 시간대 분석
           const timeframes = {
+            '5m': analyzeTimeframe(candles5m, candles30m, candles1h),
             '30m': analyzeTimeframe(candles30m, candles1h, candles4h),
             '1h': analyzeTimeframe(candles1h, candles4h, candles1d),
             '4h': analyzeTimeframe(candles4h, candles1d, candles1h),
@@ -322,9 +332,9 @@ async function performAnalysis() {
           };
 
           const boxCount = Object.values(timeframes).filter(tf => tf.hasBox).length;
-          const allTimeframes = boxCount === 4;
+          const allTimeframes = boxCount === 5;
 
-          return {
+          const analysisResult: MultiTimeframeResult = {
             symbol: item.symbol,
             exchange: item.exchange,
             volume: item.volume,
@@ -339,6 +349,14 @@ async function performAnalysis() {
               ma50Current: ma50Analysis.ma50Current!,
             } : undefined,
           };
+
+          // ─ 심볼 캐시 저장 ─────────────────────────────────────────────────
+          symbolCache.set(`${item.exchange}-${item.symbol}`, {
+            result: analysisResult,
+            timestamp: Date.now(),
+          });
+
+          return analysisResult;
         } catch (e: any) {
           console.error(`Error analyzing ${item.symbol} (${item.exchange}):`, e.message);
           // 에러가 발생해도 빈 결과 반환 (분석 계속)
@@ -348,6 +366,7 @@ async function performAnalysis() {
             volume: item.volume,
             currentPrice: 0,
             timeframes: {
+              '5m': { hasBox: false },
               '30m': { hasBox: false },
               '1h': { hasBox: false },
               '4h': { hasBox: false },
@@ -371,10 +390,15 @@ async function performAnalysis() {
     // null 제거 및 박스권이 1개 이상 있는 종목만 필터링
     const validResults = results.filter(r => r && r.boxCount > 0);
 
-    // 디버깅: 거래소별 박스권 종목 수
+    // 캐시 효율 및 박스권 종목 수 로그
     const upbitBoxCount = validResults.filter(r => r.exchange === 'upbit').length;
     const bithumbBoxCount = validResults.filter(r => r.exchange === 'bithumb').length;
-    console.log(`Box patterns found: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`);
+    console.log(
+      `Analysis done — total: ${allMarkets.length}, ` +
+      `cache hits: ${cacheHits} (${Math.round(cacheHits / allMarkets.length * 100)}%), ` +
+      `misses: ${cacheMisses}, ` +
+      `box patterns: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`
+    );
 
     // 돌파 개수 계산 함수
     const countBreakouts = (result: MultiTimeframeResult) => {

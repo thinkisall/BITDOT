@@ -84,16 +84,15 @@ export async function updatePost(
   }
 }
 
-export async function deletePost(postId: string): Promise<void> {
-  // 소프트 삭제
-  const { error } = await supabase
-    .from('posts')
-    .update({ is_deleted: true })
-    .eq('id', postId);
+export async function deletePost(postId: string, userUid: string): Promise<void> {
+  const res = await fetch(`/api/board/posts/${postId}`, {
+    method: 'DELETE',
+    headers: { 'x-user-uid': userUid },
+  });
 
-  if (error) {
-    console.error('Error deleting post:', error);
-    throw error;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '게시글 삭제에 실패했습니다.');
   }
 }
 

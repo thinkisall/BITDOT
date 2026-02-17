@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { CoinData } from '../types/market';
 
 interface PriceTickerProps {
@@ -7,10 +8,18 @@ interface PriceTickerProps {
 }
 
 export default function PriceTicker({ data }: PriceTickerProps) {
-  // Get top 10 coins by change rate (positive only)
-  const topGainers = data
-    .filter(coin => coin.avgChangeRate > 0)
-    .slice(0, 10);
+  // rank Map 사전 계산 — 렌더 시 O(n) findIndex 제거
+  const rankMap = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((coin, idx) => map.set(coin.symbol, idx + 1));
+    return map;
+  }, [data]);
+
+  // topGainers memoize
+  const topGainers = useMemo(
+    () => data.filter(coin => coin.avgChangeRate > 0).slice(0, 10),
+    [data]
+  );
 
   const formatPrice = (coin: CoinData) => {
     const price = coin.upbit?.price || coin.bithumb?.price;
@@ -40,7 +49,7 @@ export default function PriceTicker({ data }: PriceTickerProps) {
               <div className="text-sm font-medium text-white flex items-center gap-2">
                 {coin.symbol}
                 <span className="text-xs px-1.5 py-0.5 bg-green-500/10 text-green-500 rounded">
-                  TOP {data.findIndex(c => c.symbol === coin.symbol) + 1}
+                  TOP {rankMap.get(coin.symbol) ?? '-'}
                 </span>
               </div>
               <div className="text-xs text-zinc-500">{formatPrice(coin)}</div>

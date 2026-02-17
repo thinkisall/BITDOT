@@ -7,9 +7,10 @@ import { deletePost } from '@/lib/supabase/posts';
 interface PostDetailProps {
   post: Post;
   isAuthor: boolean;
+  userUid?: string;
 }
 
-export default function PostDetail({ post, isAuthor }: PostDetailProps) {
+export default function PostDetail({ post, isAuthor, userUid }: PostDetailProps) {
   const router = useRouter();
 
   const formatDate = (dateString: string) => {
@@ -29,9 +30,8 @@ export default function PostDetail({ post, isAuthor }: PostDetailProps) {
     }
 
     try {
-      await deletePost(post.id);
-      alert('게시글이 삭제되었습니다.');
-      router.push('/board');
+      await deletePost(post.id, userUid!);
+      window.location.href = '/board';
     } catch (error) {
       console.error('Error deleting post:', error);
       alert('게시글 삭제에 실패했습니다.');
