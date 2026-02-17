@@ -92,6 +92,8 @@ interface MultiTimeframeResult {
   };
   boxCount: number; // 박스권 형성된 시간대 개수
   allTimeframes: boolean; // 모든 시간대에서 박스권 형성
+  goldenAlignment?: boolean; // 1시간봉 정배열 (MA50 > MA110 > MA180)
+  cloudStatus?: 'above' | 'near'; // 구름 위 or 구름 2% 이내 아래(주목)
   volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
   watchlist?: { // 관심종목 (1시간봉 MA50 우상향)
     isUptrend: boolean;
@@ -152,16 +154,21 @@ function detectGoldenAlignment(candles: any[]): boolean {
   return ma50 > ma110 && ma110 > ma180;
 }
 
-// 현재가가 일목구름(선행스팬 A·B) 위에 있는지 확인
-// 현재 캔들(N-1)에 표시되는 구름 = 26봉 전(N-27) 시점에서 계산한 값
-function detectAboveIchimokuCloud(candles: any[], currentPrice: number): boolean {
+// 일목구름 대비 현재가 상태 반환
+// 'above' : 구름 위  (통과)
+// 'near'  : 구름 상단 2% 이내 아래  (주목)
+// 'below' : 구름 상단 2% 이상 아래  (제외)
+function getIchimokuCloudStatus(
+  candles: any[],
+  currentPrice: number
+): 'above' | 'near' | 'below' {
   const N = candles.length;
-  if (N < 78) return false; // 최소 52(SpanB) + 26(displacement)
+  if (N < 78) return 'below';
 
   const highs: number[] = candles.map((c: any) => c.high);
   const lows:  number[] = candles.map((c: any) => c.low);
   const i = N - 1 - 26; // 현재 캔들에 표시되는 구름의 계산 시점
-  if (i < 51) return false;
+  if (i < 51) return 'below';
 
   const tHigh = Math.max(...highs.slice(i - 8,  i + 1));
   const tLow  = Math.min(...lows.slice( i - 8,  i + 1));
@@ -177,7 +184,11 @@ function detectAboveIchimokuCloud(candles: any[], currentPrice: number): boolean
   const bLow  = Math.min(...lows.slice( i - 51, i + 1));
   const spanB = (bHigh + bLow) / 2;
 
-  return currentPrice > Math.max(spanA, spanB);
+  const cloudTop = Math.max(spanA, spanB);
+
+  if (currentPrice >= cloudTop) return 'above';
+  if (currentPrice >= cloudTop * 0.98) return 'near'; // 2% 이내 아래
+  return 'below';
 }
 
 // 거래량 급증 탐지 함수 (1시간봉 기준)
@@ -295,19 +306,15 @@ async function performAnalysis() {
 
           const currentPrice = candles1h[candles1h.length - 1].close;
 
-          // ─ 사전 필터 1: 1시간봉 정배열 (MA50 > MA110 > MA180) ─────────────
-          if (!detectGoldenAlignment(candles1h)) {
-            const filtered: MultiTimeframeResult = {
-              symbol: item.symbol, exchange: item.exchange, volume: item.volume,
-              currentPrice, boxCount: 0, allTimeframes: false,
-              timeframes: { '5m': { hasBox: false }, '30m': { hasBox: false }, '1h': { hasBox: false }, '4h': { hasBox: false }, '1d': { hasBox: false } },
-            };
-            symbolCache.set(cacheKey, { result: filtered, timestamp: Date.now() });
-            return filtered;
-          }
+          // ─ 정배열 여부 계산 (필터 아님 — 정렬 우선순위에만 사용) ──────────
+          const goldenAlignment = detectGoldenAlignment(candles1h);
 
-          // ─ 사전 필터 2: 현재가가 일목구름 위 ─────────────────────────────
-          if (!detectAboveIchimokuCloud(candles1h, currentPrice)) {
+          // ─ 사전 필터: 일목구름 상태 확인 ────────────────────────────────
+          // 'above': 구름 위 (통과)
+          // 'near' : 구름 상단 2% 이내 아래 (주목으로 통과)
+          // 'below': 구름 상단 2% 이상 아래 (제외)
+          const cloudStatus = getIchimokuCloudStatus(candles1h, currentPrice);
+          if (cloudStatus === 'below') {
             const filtered: MultiTimeframeResult = {
               symbol: item.symbol, exchange: item.exchange, volume: item.volume,
               currentPrice, boxCount: 0, allTimeframes: false,
@@ -404,6 +411,8 @@ async function performAnalysis() {
             timeframes,
             boxCount,
             allTimeframes,
+            goldenAlignment,
+            cloudStatus,
             volumeSpike,
             watchlist: ma50Analysis.isUptrend ? {
               isUptrend: true,
@@ -467,18 +476,28 @@ async function performAnalysis() {
       return Object.values(result.timeframes).filter(tf => tf.position === 'breakout').length;
     };
 
-    // 돌파 개수순, 박스권 개수순, 거래량순 정렬
+    // 정배열 → 돌파 → 박스권 개수 → 거래량 순 정렬
     validResults.sort((a, b) => {
+      // 1순위: 정배열 (MA50 > MA110 > MA180) 여부
+      const aGolden = a.goldenAlignment ? 1 : 0;
+      const bGolden = b.goldenAlignment ? 1 : 0;
+      if (bGolden !== aGolden) return bGolden - aGolden;
+
+      // 2순위: 구름 위 > 구름 근접(주목) 순
+      const cloudScore = (s?: string) => s === 'above' ? 2 : s === 'near' ? 1 : 0;
+      if (cloudScore(b.cloudStatus) !== cloudScore(a.cloudStatus))
+        return cloudScore(b.cloudStatus) - cloudScore(a.cloudStatus);
+
       const aBreakouts = countBreakouts(a);
       const bBreakouts = countBreakouts(b);
 
-      // 1순위: 돌파 개수 많은 순
+      // 3순위: 돌파 개수 많은 순
       if (bBreakouts !== aBreakouts) return bBreakouts - aBreakouts;
 
-      // 2순위: 박스권 개수 많은 순
+      // 4순위: 박스권 개수 많은 순
       if (b.boxCount !== a.boxCount) return b.boxCount - a.boxCount;
 
-      // 3순위: 거래량 많은 순
+      // 5순위: 거래량 많은 순
       return b.volume - a.volume;
     });
 

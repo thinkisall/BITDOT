@@ -45,6 +45,8 @@ interface MultiTimeframeResult {
   };
   boxCount: number;
   allTimeframes: boolean;
+  goldenAlignment?: boolean;
+  cloudStatus?: 'above' | 'near';
   volumeSpike?: VolumeSpike;
   watchlist?: {
     isUptrend: boolean;
@@ -559,6 +561,22 @@ export default function AnalysisPage() {
                                     title={`거래량 ${result.volumeSpike.ratio}배 급증`}
                                   >
                                     🔥 급증
+                                  </span>
+                                )}
+                                {result.goldenAlignment && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold whitespace-nowrap"
+                                    title="1시간봉 정배열 (MA50 > MA110 > MA180)"
+                                  >
+                                    정배열
+                                  </span>
+                                )}
+                                {result.cloudStatus === 'near' && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 font-bold whitespace-nowrap"
+                                    title="일목구름 상단 2% 이내 — 돌파 임박 주목"
+                                  >
+                                    ☁ 주목
                                   </span>
                                 )}
                                 {result.watchlist && (
