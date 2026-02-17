@@ -4,7 +4,7 @@
 /**
  * API Base URL 가져오기
  * - 로컬: http://localhost:3001
- * - Vercel: ngrok URL
+ * - Vercel: Cloudflare Tunnel URL
  */
 export function getApiUrl(): string {
   // 브라우저에서만 접근 가능한 환경 변수

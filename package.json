@@ -11,10 +11,7 @@
     "start": "next start",
     "start:backend": "node server/index.js",
     "lint": "eslint",
-    "server": "node start-server.js",
-    "ngrok": "node ngrok-tunnel.js",
-    "ngrok:backend": "ngrok http 3001 --region jp",
-    "dev:ngrok": "USE_NGROK=true node start-server.js"
+    "tunnel": "cloudflared tunnel --no-autoupdate run --token $CLOUDFLARE_TUNNEL_TOKEN"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

@@ -66,8 +66,8 @@ export default function AnalysisPage() {
   const ITEMS_PER_PAGE = 20;
   const PREMIUM_REQUIRED_PAGES = [1, 2]; // 1, 2페이지는 프리미엄 필요
 
-  // API URL (환경 변수 또는 상대 경로)
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+  // API URL: Vercel에서는 Cloudflare Tunnel로, 로컬에서는 Next.js API 라우트로
+  const ANALYSIS_URL = process.env.NEXT_PUBLIC_API_URL || '/api/multi-timeframe';
 
   // Fetch Binance Alpha symbols
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/multi-timeframe`, {
+        const response = await fetch(ANALYSIS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -104,7 +104,7 @@ export default function AnalysisPage() {
     };
 
     fetchData();
-  }, [API_URL]); // API_URL 변경 시 재실행
+  }, [ANALYSIS_URL]);
 
   // 검색어 변경 시 페이지 초기화
   useEffect(() => {
@@ -124,7 +124,7 @@ export default function AnalysisPage() {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${API_URL}/api/multi-timeframe`, {
+        const response = await fetch(ANALYSIS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -147,7 +147,7 @@ export default function AnalysisPage() {
     setResults(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/multi-timeframe`, {
+      const response = await fetch(ANALYSIS_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
