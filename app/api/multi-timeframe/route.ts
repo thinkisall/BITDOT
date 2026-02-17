@@ -140,6 +140,46 @@ function detectMA50Uptrend(candles: any[]): { isUptrend: boolean; slope?: number
   };
 }
 
+// 1시간봉 정배열 판별: MA50 > MA110 > MA180
+function detectGoldenAlignment(candles: any[]): boolean {
+  if (candles.length < 180) return false;
+  const closes: number[] = candles.map((c: any) => c.close);
+  const N = closes.length;
+  const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
+  const ma50  = sum(closes.slice(N - 50 )) / 50;
+  const ma110 = sum(closes.slice(N - 110)) / 110;
+  const ma180 = sum(closes.slice(N - 180)) / 180;
+  return ma50 > ma110 && ma110 > ma180;
+}
+
+// 현재가가 일목구름(선행스팬 A·B) 위에 있는지 확인
+// 현재 캔들(N-1)에 표시되는 구름 = 26봉 전(N-27) 시점에서 계산한 값
+function detectAboveIchimokuCloud(candles: any[], currentPrice: number): boolean {
+  const N = candles.length;
+  if (N < 78) return false; // 최소 52(SpanB) + 26(displacement)
+
+  const highs: number[] = candles.map((c: any) => c.high);
+  const lows:  number[] = candles.map((c: any) => c.low);
+  const i = N - 1 - 26; // 현재 캔들에 표시되는 구름의 계산 시점
+  if (i < 51) return false;
+
+  const tHigh = Math.max(...highs.slice(i - 8,  i + 1));
+  const tLow  = Math.min(...lows.slice( i - 8,  i + 1));
+  const tenkan = (tHigh + tLow) / 2;
+
+  const kHigh = Math.max(...highs.slice(i - 25, i + 1));
+  const kLow  = Math.min(...lows.slice( i - 25, i + 1));
+  const kijun = (kHigh + kLow) / 2;
+
+  const spanA = (tenkan + kijun) / 2;
+
+  const bHigh = Math.max(...highs.slice(i - 51, i + 1));
+  const bLow  = Math.min(...lows.slice( i - 51, i + 1));
+  const spanB = (bHigh + bLow) / 2;
+
+  return currentPrice > Math.max(spanA, spanB);
+}
+
 // 거래량 급증 탐지 함수 (1시간봉 기준)
 function detectVolumeSpike(candles: any[], threshold: number = 20): VolumeSpike | undefined {
   if (candles.length < 21) return undefined; // 최소 21개 필요 (20개 평균 + 1개 비교)
@@ -254,6 +294,28 @@ async function performAnalysis() {
           }
 
           const currentPrice = candles1h[candles1h.length - 1].close;
+
+          // ─ 사전 필터 1: 1시간봉 정배열 (MA50 > MA110 > MA180) ─────────────
+          if (!detectGoldenAlignment(candles1h)) {
+            const filtered: MultiTimeframeResult = {
+              symbol: item.symbol, exchange: item.exchange, volume: item.volume,
+              currentPrice, boxCount: 0, allTimeframes: false,
+              timeframes: { '5m': { hasBox: false }, '30m': { hasBox: false }, '1h': { hasBox: false }, '4h': { hasBox: false }, '1d': { hasBox: false } },
+            };
+            symbolCache.set(cacheKey, { result: filtered, timestamp: Date.now() });
+            return filtered;
+          }
+
+          // ─ 사전 필터 2: 현재가가 일목구름 위 ─────────────────────────────
+          if (!detectAboveIchimokuCloud(candles1h, currentPrice)) {
+            const filtered: MultiTimeframeResult = {
+              symbol: item.symbol, exchange: item.exchange, volume: item.volume,
+              currentPrice, boxCount: 0, allTimeframes: false,
+              timeframes: { '5m': { hasBox: false }, '30m': { hasBox: false }, '1h': { hasBox: false }, '4h': { hasBox: false }, '1d': { hasBox: false } },
+            };
+            symbolCache.set(cacheKey, { result: filtered, timestamp: Date.now() });
+            return filtered;
+          }
 
           // 1시간봉 거래량 급증 탐지
           const volumeSpike = detectVolumeSpike(candles1h, 20);

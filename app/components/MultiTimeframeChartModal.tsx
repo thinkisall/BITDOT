@@ -230,6 +230,101 @@ export default function MultiTimeframeChartModal({
           sma180Series.setData(data.sma180);
         }
 
+        // 일목구름 — 선행스팬 A, B + 구름 채우기
+        if (data.ichimokuA && data.ichimokuB) {
+          // 선행스팬 A (녹색 계열)
+          const spanASeries = chart.addLineSeries({
+            color: 'rgba(34, 197, 94, 0.8)',
+            lineWidth: 1,
+            title: '선행A',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          spanASeries.setData(data.ichimokuA);
+
+          // 선행스팬 B (빨간 계열)
+          const spanBSeries = chart.addLineSeries({
+            color: 'rgba(239, 68, 68, 0.8)',
+            lineWidth: 1,
+            title: '선행B',
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          spanBSeries.setData(data.ichimokuB);
+
+          // 구름 채우기 커스텀 프리미티브
+          const spanAMap = new Map<number, number>(
+            data.ichimokuA.map((p: any) => [p.time, p.value])
+          );
+          const spanBMap = new Map<number, number>(
+            data.ichimokuB.map((p: any) => [p.time, p.value])
+          );
+          const sharedTimes = data.ichimokuA
+            .map((p: any) => p.time)
+            .filter((t: number) => spanBMap.has(t))
+            .sort((a: number, b: number) => a - b);
+
+          const cloudPrimitive = {
+            attached({ chart: c, series: s }: any) {
+              (cloudPrimitive as any)._c = c;
+              (cloudPrimitive as any)._s = s;
+            },
+            updateAllViews() {},
+            paneViews() {
+              return [{
+                renderer: () => ({
+                  draw(target: any) {
+                    const c = (cloudPrimitive as any)._c;
+                    const s = (cloudPrimitive as any)._s;
+                    if (!c || !s || sharedTimes.length < 2) return;
+
+                    target.useBitmapCoordinateSpace((scope: any) => {
+                      const ctx: CanvasRenderingContext2D = scope.context;
+                      const ts = c.timeScale();
+                      const hpr = scope.horizontalPixelRatio;
+                      const vpr = scope.verticalPixelRatio;
+
+                      const coords = sharedTimes
+                        .map((t: number) => {
+                          const x  = ts.timeToCoordinate(t as any);
+                          const yA = s.priceToCoordinate(spanAMap.get(t)!);
+                          const yB = s.priceToCoordinate(spanBMap.get(t)!);
+                          if (x === null || yA === null || yB === null) return null;
+                          return { x: x * hpr, yA: yA * vpr, yB: yB * vpr };
+                        })
+                        .filter(Boolean) as { x: number; yA: number; yB: number }[];
+
+                      if (coords.length < 2) return;
+
+                      ctx.save();
+                      // 세그먼트별 색상 채우기
+                      for (let i = 0; i < coords.length - 1; i++) {
+                        const c0 = coords[i];
+                        const c1 = coords[i + 1];
+                        // 화면좌표에서 yA < yB 이면 SpanA 가격이 더 높음 (상승구름)
+                        const bullish = c0.yA < c0.yB;
+                        ctx.beginPath();
+                        ctx.moveTo(c0.x, c0.yA);
+                        ctx.lineTo(c1.x, c1.yA);
+                        ctx.lineTo(c1.x, c1.yB);
+                        ctx.lineTo(c0.x, c0.yB);
+                        ctx.closePath();
+                        ctx.fillStyle = bullish
+                          ? 'rgba(34, 197, 94, 0.12)'   // 상승구름 — 녹색
+                          : 'rgba(239, 68, 68, 0.12)';  // 하락구름 — 빨간색
+                        ctx.fill();
+                      }
+                      ctx.restore();
+                    });
+                  },
+                }),
+              }];
+            },
+          };
+
+          spanASeries.attachPrimitive(cloudPrimitive);
+        }
+
         // Bollinger Bands
         if (data.bollingerBands) {
           // Upper Band
@@ -326,55 +421,82 @@ export default function MultiTimeframeChartModal({
       onClick={onClose}
     >
       <div
-        className="bg-zinc-900 rounded-lg border border-zinc-800 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-zinc-900 rounded-2xl border border-zinc-700/60 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black/60"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-zinc-800">
-          <div>
-            <h2 className="text-base sm:text-xl font-bold text-white mb-1">
-              {symbol} 멀티 타임프레임 분석
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400">
-              {exchange === 'upbit' ? '업비트' : '빗썸'}
-            </p>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-zinc-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-500/30 flex items-center justify-center">
+              <span className="text-amber-400 text-xs font-bold">{symbol.slice(0, 2)}</span>
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-lg font-bold text-white tracking-tight">
+                {symbol}
+                <span className="ml-2 text-xs font-normal text-zinc-500 tracking-normal">멀티 타임프레임</span>
+              </h2>
+              <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">
+                {exchange === 'upbit' ? '업비트 (Upbit)' : '빗썸 (Bithumb)'}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition-colors text-xl sm:text-2xl"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all text-base"
           >
             ✕
           </button>
         </div>
 
         {/* Timeframe Tabs */}
-        <div className="flex gap-1 sm:gap-2 p-3 sm:p-4 border-b border-zinc-800 overflow-x-auto scrollbar-hide">
-          {(Object.keys(TIMEFRAME_LABELS) as TimeframeKey[]).map((tf) => {
-            const boxInfo = timeframes[tf];
-            const isActive = activeTimeframe === tf;
-            return (
-              <button
-                key={tf}
-                onClick={() => setActiveTimeframe(tf)}
-                className={`
-                  flex-none w-[90px] sm:w-auto sm:flex-1 sm:min-w-[110px] px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium text-xs sm:text-sm transition-all
-                  ${isActive
-                    ? 'bg-yellow-500 text-black'
-                    : boxInfo.hasBox
-                    ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                  }
-                `}
-              >
-                <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                  <span className="whitespace-nowrap">{TIMEFRAME_LABELS[tf]}</span>
-                  <span className="text-[10px] sm:text-xs whitespace-nowrap">
-                    {boxInfo.hasBox ? '✓ 박스권' : '−'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+        <div className="px-3 sm:px-5 pt-3 sm:pt-4 pb-0 border-b border-zinc-800/60 bg-black/20">
+          <div className="flex gap-1 sm:gap-1.5 overflow-x-auto scrollbar-hide">
+            {(Object.keys(TIMEFRAME_LABELS) as TimeframeKey[]).map((tf) => {
+              const boxInfo = timeframes[tf];
+              const isActive = activeTimeframe === tf;
+              return (
+                <button
+                  key={tf}
+                  onClick={() => setActiveTimeframe(tf)}
+                  className={`
+                    relative flex-none sm:flex-1 min-w-18 sm:min-w-0
+                    px-3 sm:px-4 pt-2.5 pb-3.5 rounded-t-xl
+                    font-medium transition-all duration-200 text-center
+                    border-t border-l border-r
+                    ${isActive
+                      ? 'bg-zinc-900 border-zinc-700/80 text-white'
+                      : boxInfo.hasBox
+                      ? 'bg-transparent border-transparent text-zinc-300 hover:bg-zinc-800/40 hover:border-zinc-700/30'
+                      : 'bg-transparent border-transparent text-zinc-600 hover:text-zinc-500'
+                    }
+                  `}
+                >
+                  {/* 활성 탭 하단 앰버 라인 */}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-400 rounded-full" />
+                  )}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-[11px] sm:text-xs font-semibold tracking-wider uppercase whitespace-nowrap">
+                      {TIMEFRAME_LABELS[tf]}
+                    </span>
+                    {boxInfo.hasBox ? (
+                      <span className={`inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full
+                        ${isActive
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                        }`}
+                      >
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                        박스권
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-zinc-700 px-1.5 py-0.5">미감지</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Chart Container */}

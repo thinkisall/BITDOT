@@ -111,6 +111,43 @@ export async function GET(req: Request) {
       lower: value.lower,
     }));
 
+    // 일목균형표 — 선행스팬 A, B (이동 26)
+    // 전환선: 9기간 (H+L)/2  기준선: 26기간 (H+L)/2
+    // 선행A: (전환+기준)/2 → 26봉 앞
+    // 선행B: 52기간 (H+L)/2 → 26봉 앞
+    const highs = candles.map(c => c.high);
+    const lows  = candles.map(c => c.low);
+    const N     = candles.length;
+    const D     = 26; // displacement
+    const periodMs = N >= 2 ? candles[N - 1].t - candles[N - 2].t : 3_600_000;
+
+    const ichimokuA: { time: number; value: number }[] = [];
+    const ichimokuB: { time: number; value: number }[] = [];
+
+    for (let i = 51; i < N; i++) {
+      const tHigh = Math.max(...highs.slice(i - 8, i + 1));
+      const tLow  = Math.min(...lows.slice(i - 8, i + 1));
+      const tenkan = (tHigh + tLow) / 2;
+
+      const kHigh = Math.max(...highs.slice(i - 25, i + 1));
+      const kLow  = Math.min(...lows.slice(i - 25, i + 1));
+      const kijun = (kHigh + kLow) / 2;
+
+      const spanA = (tenkan + kijun) / 2;
+
+      const bHigh = Math.max(...highs.slice(i - 51, i + 1));
+      const bLow  = Math.min(...lows.slice(i - 51, i + 1));
+      const spanB = (bHigh + bLow) / 2;
+
+      // 26봉 앞 타임스탬프 (미래는 추정치)
+      const plotTime = i + D < N
+        ? Math.floor(candles[i + D].t / 1000)
+        : Math.floor((candles[N - 1].t + (i + D - (N - 1)) * periodMs) / 1000);
+
+      ichimokuA.push({ time: plotTime, value: spanA });
+      ichimokuB.push({ time: plotTime, value: spanB });
+    }
+
     // 타임프레임별 캐시 TTL (캔들 주기에 맞춤)
     const ttlMap: Record<string, number> = { '5m': 300, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400 };
     const ttl = ttlMap[timeframe] || 3600;
@@ -121,6 +158,8 @@ export async function GET(req: Request) {
       sma110: sma110Data,
       sma180: sma180Data,
       bollingerBands: bollingerBands,
+      ichimokuA,
+      ichimokuB,
     }), {
       headers: {
         'Content-Type': 'application/json',
