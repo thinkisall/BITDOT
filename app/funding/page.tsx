@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
 
 interface FundingData {
@@ -83,6 +83,9 @@ export default function FundingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all');
   const [sortType, setSortType] = useState<SortType>('highest');
+  const [currentPage, setCurrentPage] = useState(1);
+  const tableTopRef = useRef<HTMLDivElement>(null);
+  const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
     fetchFundingData();
@@ -205,6 +208,47 @@ export default function FundingPage() {
   };
 
   const filteredData = getFilteredAndSortedData();
+
+  // 필터/검색 변경 시 페이지 리셋
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, exchangeFilter, sortType]);
+
+  // 페이지네이션
+  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentData = filteredData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+    tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (currentPage <= 3) {
+      for (let i = 1; i <= 4; i++) pages.push(i);
+      pages.push('...');
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      pages.push(1);
+      pages.push('...');
+      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push('...');
+      pages.push(currentPage - 1);
+      pages.push(currentPage);
+      pages.push(currentPage + 1);
+      pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -343,59 +387,104 @@ export default function FundingPage() {
 
         {/* Data Table */}
         {!isLoading && !error && fundingData && (
-          <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                    <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">종목</th>
-                    <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">거래소</th>
-                    <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">펀딩비</th>
-                    <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden sm:table-cell">다음 정산</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.length > 0 ? (
-                    filteredData.map((item, index) => (
-                      <tr
-                        key={`${item.exchange}-${item.symbol}-${index}`}
-                        className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
-                      >
-                        <td className="p-2 sm:p-4">
-                          <div className="font-medium text-white text-xs sm:text-sm">{item.symbol}</div>
-                        </td>
-                        <td className="p-2 sm:p-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded text-[9px] sm:text-xs font-bold border ${getExchangeColor(item.exchange)}`}>
-                            {getExchangeName(item.exchange)}
-                          </span>
-                        </td>
-                        <td className="p-2 sm:p-4 text-right">
-                          <div className={`inline-block px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold text-xs sm:text-sm ${getFundingRateColor(item.fundingRate)}`}>
-                            {item.fundingRate > 0 ? '+' : ''}{item.fundingRatePercent.toFixed(4)}%
-                          </div>
-                        </td>
-                        <td className="p-2 sm:p-4 text-right text-xs sm:text-sm text-zinc-400 hidden sm:table-cell">
-                          {formatNextFundingTime(item.nextFundingTime)}
+          <div ref={tableTopRef}>
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-800 bg-zinc-900/50">
+                      <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">종목</th>
+                      <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">거래소</th>
+                      <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">펀딩비</th>
+                      <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden sm:table-cell">다음 정산</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentData.length > 0 ? (
+                      currentData.map((item, index) => (
+                        <tr
+                          key={`${item.exchange}-${item.symbol}-${index}`}
+                          className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                        >
+                          <td className="p-2 sm:p-4">
+                            <div className="font-medium text-white text-xs sm:text-sm">{item.symbol}</div>
+                          </td>
+                          <td className="p-2 sm:p-4 text-center">
+                            <span className={`inline-block px-2 py-1 rounded text-[9px] sm:text-xs font-bold border ${getExchangeColor(item.exchange)}`}>
+                              {getExchangeName(item.exchange)}
+                            </span>
+                          </td>
+                          <td className="p-2 sm:p-4 text-right">
+                            <div className={`inline-block px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold text-xs sm:text-sm ${getFundingRateColor(item.fundingRate)}`}>
+                              {item.fundingRate > 0 ? '+' : ''}{item.fundingRatePercent.toFixed(4)}%
+                            </div>
+                          </td>
+                          <td className="p-2 sm:p-4 text-right text-xs sm:text-sm text-zinc-400 hidden sm:table-cell">
+                            {formatNextFundingTime(item.nextFundingTime)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">
+                          검색 결과가 없습니다
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">
-                        검색 결과가 없습니다
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Showing count */}
+              {filteredData.length > 0 && (
+                <div className="p-3 sm:p-4 border-t border-zinc-800 bg-zinc-900/50">
+                  <p className="text-xs sm:text-sm text-zinc-400 text-center">
+                    {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length)} / 총 <span className="text-yellow-500 font-medium">{filteredData.length}</span>개
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Showing count */}
-            {filteredData.length > 0 && (
-              <div className="p-3 sm:p-4 border-t border-zinc-800 bg-zinc-900/50">
-                <p className="text-xs sm:text-sm text-zinc-400 text-center">
-                  총 <span className="text-yellow-500 font-medium">{filteredData.length}</span>개 종목 표시 중
-                </p>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-3 sm:mt-4 flex items-center justify-center gap-1.5 sm:gap-2">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-sm bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  이전
+                </button>
+
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  {getPageNumbers().map((page, idx) => (
+                    typeof page === 'number' ? (
+                      <button
+                        key={idx}
+                        onClick={() => goToPage(page)}
+                        className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-sm rounded transition-colors ${
+                          currentPage === page
+                            ? 'bg-yellow-500 text-black font-medium'
+                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ) : (
+                      <span key={idx} className="px-1 sm:px-2 text-[11px] sm:text-sm text-zinc-600">
+                        {page}
+                      </span>
+                    )
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-sm bg-zinc-800 text-zinc-400 rounded hover:bg-zinc-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  다음
+                </button>
               </div>
             )}
           </div>
