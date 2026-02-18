@@ -29,17 +29,21 @@ function formatPriceDiff(diff: number) {
   return `${sign}${formatPrice(Math.abs(diff))}`;
 }
 
+type ExchangeFilter = 'all' | 'upbit' | 'bithumb';
+
 // 메모이즈된 행 컴포넌트 — flashMap 변경 시 해당 행만 재렌더링
 const CoinRow = memo(function CoinRow({
   coin,
   rank,
   flash,
   swapped,
+  exchangeFilter,
 }: {
   coin: CoinData;
   rank: number;
   flash?: FlashState;
   swapped?: boolean;
+  exchangeFilter: ExchangeFilter;
 }) {
   const { isAlpha: isBinanceAlpha } = useBinanceAlpha();
 
@@ -56,6 +60,82 @@ const CoinRow = memo(function CoinRow({
   const leftData = swapped ? coin.upbit : coin.bithumb;
   const rightData = swapped ? coin.bithumb : coin.upbit;
 
+  // 단일 거래소 모드
+  const singleExch = exchangeFilter !== 'all' ? exchangeFilter : null;
+  const singleData = singleExch === 'upbit' ? coin.upbit : singleExch === 'bithumb' ? coin.bithumb : null;
+
+  const CoinInfo = () => (
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+        <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium text-white">{coin.name}</div>
+          {isBinanceAlpha(coin.symbol) && (
+            <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">ALPHA</span>
+          )}
+        </div>
+        <div className="text-xs text-zinc-500">{coin.symbol}</div>
+      </div>
+    </div>
+  );
+
+  const MobileCoinInfo = () => (
+    <div className="flex items-center gap-1.5">
+      <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+        <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
+      </div>
+      <div className="min-w-0">
+        <div className="flex items-center gap-1">
+          <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+          {isBinanceAlpha(coin.symbol) && (
+            <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">α</span>
+          )}
+        </div>
+        <div className="text-[8px] text-zinc-500">#{rank}</div>
+      </div>
+    </div>
+  );
+
+  if (singleExch && singleData) {
+    // ── 단일 거래소 레이아웃 ──
+    return (
+      <Fragment>
+        {/* Desktop */}
+        <tr className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors hidden sm:table-row">
+          <td className="p-4"><div className="text-sm font-medium text-zinc-400">#{rank}</div></td>
+          <td className="p-4"><CoinInfo /></td>
+          <td className={`text-right p-4 border-l border-zinc-800/50 ${fc(singleExch)}`}>
+            <div className="text-sm text-white font-medium">₩{formatPrice(singleData.price)}</div>
+          </td>
+          <td className={`text-right p-4 ${fc(singleExch)}`}>
+            <div className={`text-sm font-medium ${singleData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {formatChangeRate(singleData.changeRate)}
+            </div>
+          </td>
+          <td className="text-right p-4">
+            <div className="text-xs text-zinc-400">{formatVolume(singleData.volume)}</div>
+          </td>
+        </tr>
+        {/* Mobile */}
+        <tr className="border-b border-zinc-800 sm:hidden">
+          <td className="p-1.5"><MobileCoinInfo /></td>
+          <td className={`text-right p-1.5 ${fc(singleExch)}`}>
+            <div className="text-[11px] text-white font-medium">₩{formatPrice(singleData.price)}</div>
+            <div className={`text-[9px] font-medium ${singleData.changeRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {formatChangeRate(singleData.changeRate)}
+            </div>
+          </td>
+          <td className="text-right p-1.5">
+            <div className="text-[9px] text-zinc-400">{formatVolume(singleData.volume)}</div>
+          </td>
+        </tr>
+      </Fragment>
+    );
+  }
+
+  // ── 비교 레이아웃 (기존) ──
   return (
     <Fragment>
       {/* Desktop Row */}
@@ -63,24 +143,7 @@ const CoinRow = memo(function CoinRow({
         <td className="p-4">
           <div className="text-sm font-medium text-zinc-400">#{rank}</div>
         </td>
-        <td className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-yellow-500">{coin.symbol.slice(0, 3)}</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-white">{coin.name}</div>
-                {isBinanceAlpha(coin.symbol) && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">
-                    ALPHA
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-zinc-500">{coin.symbol}</div>
-            </div>
-          </div>
-        </td>
+        <td className="p-4"><CoinInfo /></td>
         {/* Left exchange */}
         <td className={`text-right p-4 border-l border-zinc-800/50 ${fc(leftExch)}`}>
           {leftData ? (
@@ -143,24 +206,7 @@ const CoinRow = memo(function CoinRow({
 
       {/* Mobile Row */}
       <tr className="border-b border-zinc-800 sm:hidden">
-        <td className="p-1.5">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-              <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
-                {isBinanceAlpha(coin.symbol) && (
-                  <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">
-                    α
-                  </span>
-                )}
-              </div>
-              <div className="text-[8px] text-zinc-500">#{rank}</div>
-            </div>
-          </div>
-        </td>
+        <td className="p-1.5"><MobileCoinInfo /></td>
         {/* Left exchange */}
         <td className={`text-right p-1.5 ${fc(leftExch)}`}>
           {leftData ? (
@@ -210,6 +256,7 @@ const CoinRow = memo(function CoinRow({
   prev.rank === next.rank &&
   prev.flash === next.flash &&
   prev.swapped === next.swapped &&
+  prev.exchangeFilter === next.exchangeFilter &&
   prev.coin.bithumb?.price === next.coin.bithumb?.price &&
   prev.coin.upbit?.price === next.coin.upbit?.price &&
   prev.coin.bithumb?.changeRate === next.coin.bithumb?.changeRate &&
@@ -228,6 +275,7 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [swapped, setSwapped] = useState(false);
+  const [exchangeFilter, setExchangeFilter] = useState<ExchangeFilter>('all');
   const tableTopRef = useRef<HTMLDivElement>(null);
   const prevPricesRef = useRef<Map<string, { bithumb: number; upbit: number }>>(new Map());
   const [flashMap, setFlashMap] = useState<Map<string, FlashState>>(new Map());
@@ -287,13 +335,17 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
     }
   }, [data]);
 
-  // Filter data based on search query
-  const filteredData = searchQuery
-    ? data.filter(coin =>
-        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : data;
+  // Filter data based on search query + exchange filter
+  const filteredData = data.filter(coin => {
+    const matchesSearch = !searchQuery ||
+      coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      coin.symbol.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesExchange =
+      exchangeFilter === 'all' ||
+      (exchangeFilter === 'upbit' && coin.upbit != null) ||
+      (exchangeFilter === 'bithumb' && coin.bithumb != null);
+    return matchesSearch && matchesExchange;
+  });
 
   // rank Map 사전 계산 — O(n²) getRank 제거
   const rankMap = useMemo(() => {
@@ -376,27 +428,38 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                 {isConnected ? '실시간' : '연결 중'}
               </span>
             </div>
-            <span className="text-[10px] sm:text-xs text-zinc-500">
-              {searchQuery ? `${filteredData.length}개` : `${data.length}개`}
-            </span>
+            <span className="text-[10px] sm:text-xs text-zinc-500">{filteredData.length}개</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] sm:text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
-            <span className="text-zinc-400">{swapped ? '업비트' : '빗썸'}</span>
-          </div>
-          <button
-            onClick={() => setSwapped(v => !v)}
-            className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-            title="거래소 순서 바꾸기"
-          >
-            ⇄
-          </button>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-            <span className="text-zinc-400">{swapped ? '빗썸' : '업비트'}</span>
-          </div>
+        {/* 거래소 필터 탭 */}
+        <div className="flex items-center gap-1">
+          {([
+            { key: 'all',     label: '전체' },
+            { key: 'upbit',   label: '업비트' },
+            { key: 'bithumb', label: '빗썸' },
+          ] as { key: ExchangeFilter; label: string }[]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setExchangeFilter(key); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-medium transition-colors ${
+                exchangeFilter === key
+                  ? 'bg-yellow-500 text-black'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {/* 비교 모드일 때만 순서 바꾸기 */}
+          {exchangeFilter === 'all' && (
+            <button
+              onClick={() => setSwapped(v => !v)}
+              className="ml-1 px-1.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors text-xs"
+              title="거래소 순서 바꾸기"
+            >
+              ⇄
+            </button>
+          )}
         </div>
       </div>
 
@@ -439,49 +502,67 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
         <table className="w-full">
           <thead>
-            {/* Desktop Header */}
-            <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
-              <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>순위</th>
-              <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>코인</th>
-              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
-                  {swapped ? '업비트' : '빗썸'}
-                </div>
-              </th>
-              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-                  {swapped ? '빗썸' : '업비트'}
-                </div>
-              </th>
-              <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" rowSpan={2}>차액</th>
-            </tr>
-            <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
-              <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
-              <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
-              <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
-              <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
-              <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
-              <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
-            </tr>
-
-            {/* Mobile Header */}
-            <tr className="border-b border-zinc-800 bg-zinc-900/50 sm:hidden">
-              <th className="text-left text-[9px] text-zinc-500 font-medium p-1.5">코인</th>
-              <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
-                <div className="flex items-center justify-center gap-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
-                  {swapped ? '업비트' : '빗썸'}
-                </div>
-              </th>
-              <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
-                <div className="flex items-center justify-center gap-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-                  {swapped ? '빗썸' : '업비트'}
-                </div>
-              </th>
-            </tr>
+            {exchangeFilter !== 'all' ? (
+              // ── 단일 거래소 헤더 ──
+              <>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
+                  <th className="text-left text-xs text-zinc-500 font-medium p-4">순위</th>
+                  <th className="text-left text-xs text-zinc-500 font-medium p-4">코인</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
+                </tr>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50 sm:hidden">
+                  <th className="text-left text-[9px] text-zinc-500 font-medium p-1.5">코인</th>
+                  <th className="text-right text-[9px] text-zinc-500 font-medium p-1.5">시세 / 변동률</th>
+                  <th className="text-right text-[9px] text-zinc-500 font-medium p-1.5">거래량</th>
+                </tr>
+              </>
+            ) : (
+              // ── 비교 헤더 (기존) ──
+              <>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
+                  <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>순위</th>
+                  <th className="text-left text-xs text-zinc-500 font-medium p-4" rowSpan={2}>코인</th>
+                  <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                      {swapped ? '업비트' : '빗썸'}
+                    </div>
+                  </th>
+                  <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" colSpan={3}>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                      {swapped ? '빗썸' : '업비트'}
+                    </div>
+                  </th>
+                  <th className="text-center text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800" rowSpan={2}>차액</th>
+                </tr>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50 hidden sm:table-row">
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4 border-l border-zinc-800">현재가</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">변동률</th>
+                  <th className="text-right text-xs text-zinc-500 font-medium p-4">거래량</th>
+                </tr>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50 sm:hidden">
+                  <th className="text-left text-[9px] text-zinc-500 font-medium p-1.5">코인</th>
+                  <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
+                    <div className="flex items-center justify-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                      {swapped ? '업비트' : '빗썸'}
+                    </div>
+                  </th>
+                  <th className="text-center text-[9px] text-zinc-500 font-medium p-1.5" colSpan={2}>
+                    <div className="flex items-center justify-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${swapped ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                      {swapped ? '빗썸' : '업비트'}
+                    </div>
+                  </th>
+                </tr>
+              </>
+            )}
           </thead>
             <tbody>
               {currentData.length > 0 ? (
@@ -492,6 +573,7 @@ export default function MarketTable({ data, isConnected }: MarketTableProps) {
                     rank={getRank(coin)}
                     flash={flashMap.get(coin.symbol)}
                     swapped={swapped}
+                    exchangeFilter={exchangeFilter}
                   />
                 ))
               ) : (

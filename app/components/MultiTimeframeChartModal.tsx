@@ -155,7 +155,7 @@ export default function MultiTimeframeChartModal({
         // 차트 생성
         const chart = createChart(chartContainerRef.current, {
           width: chartContainerRef.current.clientWidth,
-          height: 450,
+          height: 480,
           layout: {
             background: { color: '#18181b' },
             textColor: '#a1a1aa',
@@ -186,6 +186,18 @@ export default function MultiTimeframeChartModal({
         });
 
         candlestickSeries.setData(data.candles);
+
+        // 거래량 히스토그램 (차트 하단 20% 영역 오버레이)
+        if (data.volumes) {
+          const volumeSeries = chart.addHistogramSeries({
+            priceFormat: { type: 'volume' },
+            priceScaleId: 'volume',
+          });
+          chart.priceScale('volume').applyOptions({
+            scaleMargins: { top: 0.82, bottom: 0 },
+          });
+          volumeSeries.setData(data.volumes);
+        }
 
         // 현재가와 MA값 저장 (매수 시그널 판단용)
         const currentPrice = data.candles[data.candles.length - 1]?.close;

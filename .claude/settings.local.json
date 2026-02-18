@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx next build)",
       "Bash(winget install:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(pm2:*)",
+      "Bash(ls:*)"
     ]
   }
 }

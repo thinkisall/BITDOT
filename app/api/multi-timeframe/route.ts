@@ -499,15 +499,15 @@ async function performAnalysis() {
     };
 
     validResults.sort((a, b) => {
-      // 1순위: 우선순위 합산 점수 (구름 위 + 정배열 조합)
+      // 1순위: 6-티어 우선순위 점수
       const scoreDiff = priorityScore(b) - priorityScore(a);
       if (scoreDiff !== 0) return scoreDiff;
 
-      // 2순위: 박스권 개수 많은 순
-      if (b.boxCount !== a.boxCount) return b.boxCount - a.boxCount;
+      // 2순위: 거래량 많은 순
+      if (b.volume !== a.volume) return b.volume - a.volume;
 
-      // 3순위: 거래량 많은 순
-      return b.volume - a.volume;
+      // 3순위: 박스권 개수 많은 순
+      return b.boxCount - a.boxCount;
     });
 
     // 캐시에 저장
@@ -528,8 +528,8 @@ async function performAnalysis() {
   }
 }
 
-// 백그라운드 워커 시작 함수
-function startBackgroundWorker() {
+// 백그라운드 워커 시작 함수 (instrumentation.ts 에서도 호출)
+export function startBackgroundWorker() {
   if (backgroundWorkerStarted) {
     console.log('Background worker already started');
     return;

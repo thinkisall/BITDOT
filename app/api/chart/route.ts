@@ -74,6 +74,13 @@ export async function GET(req: Request) {
       close: c.close,
     }));
 
+    // 거래량 히스토그램 데이터 (상승=녹색, 하락=빨간)
+    const volumes = candles.map(c => ({
+      time: Math.floor(c.t / 1000) as any,
+      value: c.volume,
+      color: c.close >= c.open ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)',
+    }));
+
     // 이동평균선 계산
     const closes = candles.map(c => c.close);
 
@@ -154,6 +161,7 @@ export async function GET(req: Request) {
 
     return new Response(JSON.stringify({
       candles: chartCandles,
+      volumes,
       sma50: sma50Data,
       sma110: sma110Data,
       sma180: sma180Data,

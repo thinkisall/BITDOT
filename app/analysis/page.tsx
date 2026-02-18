@@ -556,54 +556,6 @@ export default function AnalysisPage() {
                                     ALPHA
                                   </span>
                                 )}
-                                {result.volumeSpike && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold whitespace-nowrap"
-                                    title={`거래량 ${result.volumeSpike.ratio}배 급증`}
-                                  >
-                                    🔥 급증
-                                  </span>
-                                )}
-                                {result.goldenAlignment && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold whitespace-nowrap"
-                                    title="1시간봉 정배열 (MA50 > MA110 > MA180)"
-                                  >
-                                    정배열
-                                  </span>
-                                )}
-                                {result.cloudStatus === 'near' && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 font-bold whitespace-nowrap"
-                                    title="1h 일목구름 상단 2% 이내 — 돌파 임박 주목"
-                                  >
-                                    ☁ 주목
-                                  </span>
-                                )}
-                                {result.cloudStatus4h === 'above' && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 border border-violet-500/30 font-bold whitespace-nowrap"
-                                    title="4시간봉 일목구름 위 (강한 상승 신호)"
-                                  >
-                                    4h☁
-                                  </span>
-                                )}
-                                {result.cloudStatus4h === 'near' && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/20 font-bold whitespace-nowrap"
-                                    title="4시간봉 일목구름 상단 2% 이내 — 주목"
-                                  >
-                                    4h☁근접
-                                  </span>
-                                )}
-                                {result.watchlist && (
-                                  <span
-                                    className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-bold whitespace-nowrap"
-                                    title={`1시간봉 MA50 우상향 (기울기 +${result.watchlist.slope}%)`}
-                                  >
-                                    ★ 관심
-                                  </span>
-                                )}
                               </div>
                               <div className="text-[9px] sm:text-xs text-zinc-400">
                                 {result.exchange === 'upbit' ? '업비트' : '빗썸'}
@@ -613,66 +565,16 @@ export default function AnalysisPage() {
                         </td>
 
                         {/* Timeframe indicators */}
-                        <td className="text-center p-2 sm:p-4">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['5m'])} text-xs sm:text-sm font-bold`}>
-                              {getTimeframeIcon(result.timeframes['5m'])}
+                        {(['5m', '30m', '1h', '4h', '1d'] as const).map(tf => (
+                          <td key={tf} className="text-center px-1 py-2 sm:px-2">
+                            <div
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded ${getTimeframeColor(result.timeframes[tf])} text-[10px] font-bold`}
+                              title={result.timeframes[tf].hasBox && result.timeframes[tf].position ? getPositionLabel(result.timeframes[tf].position) : undefined}
+                            >
+                              {getTimeframeIcon(result.timeframes[tf])}
                             </div>
-                            {result.timeframes['5m'].hasBox && result.timeframes['5m'].position && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['5m'].position)}`}>
-                                {getPositionLabel(result.timeframes['5m'].position)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-center p-2 sm:p-4">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['30m'])} text-xs sm:text-sm font-bold`}>
-                              {getTimeframeIcon(result.timeframes['30m'])}
-                            </div>
-                            {result.timeframes['30m'].hasBox && result.timeframes['30m'].position && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['30m'].position)}`}>
-                                {getPositionLabel(result.timeframes['30m'].position)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-center p-2 sm:p-4">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['1h'])} text-xs sm:text-sm font-bold`}>
-                              {getTimeframeIcon(result.timeframes['1h'])}
-                            </div>
-                            {result.timeframes['1h'].hasBox && result.timeframes['1h'].position && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['1h'].position)}`}>
-                                {getPositionLabel(result.timeframes['1h'].position)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-center p-2 sm:p-4">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['4h'])} text-xs sm:text-sm font-bold`}>
-                              {getTimeframeIcon(result.timeframes['4h'])}
-                            </div>
-                            {result.timeframes['4h'].hasBox && result.timeframes['4h'].position && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['4h'].position)}`}>
-                                {getPositionLabel(result.timeframes['4h'].position)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-center p-2 sm:p-4">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${getTimeframeColor(result.timeframes['1d'])} text-xs sm:text-sm font-bold`}>
-                              {getTimeframeIcon(result.timeframes['1d'])}
-                            </div>
-                            {result.timeframes['1d'].hasBox && result.timeframes['1d'].position && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-medium ${getPositionColor(result.timeframes['1d'].position)}`}>
-                                {getPositionLabel(result.timeframes['1d'].position)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                          </td>
+                        ))}
 
                         <td className="text-right p-2 sm:p-4 hidden md:table-cell">
                           <div className="text-xs sm:text-sm text-white font-medium">
