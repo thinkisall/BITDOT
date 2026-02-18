@@ -390,23 +390,23 @@ export default function AnalysisPage() {
               // 공통 코인 행 컴포넌트
               const CoinRow = ({ result }: { result: MultiTimeframeResult }) => (
                 <div
-                  key={`${result.exchange}-${result.symbol}`}
                   onClick={() => setSelectedCoin(result)}
-                  className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer transition-colors last:border-b-0"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
                 >
                   <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
                     <span className="text-[9px] font-bold text-yellow-500">{result.symbol.slice(0, 2)}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-medium text-white truncate">{result.symbol}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-xs font-bold text-white truncate">{result.symbol}</span>
                       {isBinanceAlpha(result.symbol) && (
-                        <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0">ALPHA</span>
+                        <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
                       )}
                     </div>
                     <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
                   </div>
-                  <div className="flex gap-0.5 shrink-0">
+                  {/* 타임프레임 배지: 모바일(좁은 카드)에서 숨김 */}
+                  <div className="hidden sm:flex gap-0.5 shrink-0">
                     {(['5m', '30m', '1h', '4h', '1d'] as const).map(tf => (
                       <div
                         key={tf}
@@ -417,7 +417,7 @@ export default function AnalysisPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="text-[10px] text-white font-mono shrink-0 text-right w-16 sm:w-20">
+                  <div className="text-[10px] text-white font-mono shrink-0 text-right">
                     ₩{formatNumber(result.currentPrice)}
                   </div>
                 </div>
@@ -431,23 +431,19 @@ export default function AnalysisPage() {
                 items: MultiTimeframeResult[]; empty?: string;
               }) => (
                 <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
-                  <div className={`p-3 sm:p-4 border-b border-zinc-800 ${accent} rounded-t-lg`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{icon}</span>
-                          <h3 className="text-sm font-bold text-white">{title}</h3>
-                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{items.length}</span>
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">{desc}</p>
-                      </div>
+                  <div className={`px-2 py-2 sm:p-3 border-b border-zinc-800 ${accent} rounded-t-lg`}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm shrink-0">{icon}</span>
+                      <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">{title}</h3>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{items.length}</span>
                     </div>
+                    <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5 truncate">{desc}</p>
                   </div>
-                  <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                  <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
                     {items.length > 0 ? (
                       items.map(r => <CoinRow key={`${r.exchange}-${r.symbol}`} result={r} />)
                     ) : (
-                      <div className="p-6 text-center text-xs text-zinc-500">{empty || '해당 종목 없음'}</div>
+                      <div className="p-4 text-center text-[10px] text-zinc-500">{empty || '해당 종목 없음'}</div>
                     )}
                   </div>
                 </div>
