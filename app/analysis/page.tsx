@@ -258,6 +258,11 @@ export default function AnalysisPage() {
     r.cloudStatus4h  === 'above'
   );
 
+  // 실험중 타점 — 구름 무관, 1h + 4h 모두 박스권
+  const sectionLab = filteredResults
+    .filter(r => r.timeframes['1h'].hasBox && r.timeframes['4h'].hasBox)
+    .sort((a, b) => b.volume - a.volume);
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <Header />
@@ -506,6 +511,16 @@ export default function AnalysisPage() {
                       empty="MA50 우상향 종목 없음"
                     />
                   </div>
+
+                  {/* Row 3: 실험중 타점 (전체 너비) */}
+                  <SectionCard
+                    title="실험중 타점"
+                    desc="구름 무관 · 1h + 4h 박스권 동시 형성 (거래량순)"
+                    icon="🧪"
+                    accent="border-b-zinc-600/30"
+                    items={sectionLab}
+                    empty="1h + 4h 박스권 동시 형성 종목 없음"
+                  />
                 </div>
               );
             })()}

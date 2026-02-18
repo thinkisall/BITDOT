@@ -163,9 +163,9 @@ function detectDensityBox(
   const poc      = findPOC(bins, smoothed);
   const { top, bottom } = expandBox(bins, smoothed, poc, 0.12);
 
-  // 박스 높이 검증: 1.5% ~ 6%
+  // 박스 높이 검증: 1.5% ~ 4%
   const heightPct = (top - bottom) / bottom;
-  if (heightPct < 0.015 || heightPct > 0.06) return null;
+  if (heightPct < 0.015 || heightPct > 0.04) return null;
 
   // close 기준 박스 내 캔들 수 (1% 여유)
   const inBox = target.filter(c => c.close <= top * 1.01 && c.close >= bottom * 0.99).length;
