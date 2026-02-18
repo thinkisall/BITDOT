@@ -45,7 +45,10 @@ interface MultiTimeframeResult {
   };
   boxCount: number;
   allTimeframes: boolean;
-  goldenAlignment?: boolean;
+  above1hMA50?: boolean;
+  above5mMA50?: boolean;
+  cloudStatus5m?: 'above' | 'near';
+  cloudStatus30m?: 'above' | 'near';
   cloudStatus?: 'above' | 'near';
   cloudStatus4h?: 'above' | 'near';
   volumeSpike?: VolumeSpike;
@@ -76,11 +79,7 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCoin, setSelectedCoin] = useState<MultiTimeframeResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const resultsRef = useRef<HTMLDivElement>(null);
-
-  const ITEMS_PER_PAGE = 20;
-  const PREMIUM_REQUIRED_PAGES = [1, 2]; // 1, 2페이지는 프리미엄 필요
 
   // 항상 상대 경로 사용 (Vercel에서는 rewrite로 터널 프록시, 로컬에서는 Next.js API 직접)
   const ANALYSIS_URL = '/api/multi-timeframe';
@@ -105,11 +104,6 @@ export default function AnalysisPage() {
 
     fetchData();
   }, [ANALYSIS_URL]);
-
-  // 검색어 변경 시 페이지 초기화
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
 
   // 자동 갱신: 탭 활성 시 10초, 백그라운드 시 60초 (Visibility API)
   useEffect(() => {
@@ -240,60 +234,29 @@ export default function AnalysisPage() {
     result.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
-  // 페이지네이션 계산
-  const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentPageResults = filteredResults.slice(startIndex, endIndex);
+  // ─ 섹션 필터 ─────────────────────────────────────────────────────────────
+  const byBreakout = (tf: '5m' | '30m' | '1h' | '4h') =>
+    filteredResults
+      .filter(r => r.timeframes[tf].hasBox && r.timeframes[tf].position === 'breakout')
+      .sort((a, b) => b.volume - a.volume);
 
-  // 페이지 변경 및 스크롤
-  const handlePageChange = (page: number) => {
-    // 프리미엄 필요한 페이지 체크
-    if (PREMIUM_REQUIRED_PAGES.includes(page) && !isPremium) {
-      // 프리미엄 아니면 페이지 변경하지 않음 (업그레이드 안내 표시)
-      return;
-    }
+  const section5m  = byBreakout('5m');
+  const section30m = byBreakout('30m');
+  const section1h  = byBreakout('1h');
+  const section4h  = byBreakout('4h');
 
-    setCurrentPage(page);
-    // 결과 목록 최상단으로 스크롤
-    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+  // 스윙 타점 — 1h MA50 위 + 5m MA50 위
+  const sectionSwing = filteredResults.filter(r =>
+    r.above1hMA50 === true && r.above5mMA50 === true
+  );
 
-  // 현재 페이지가 프리미엄 필요한지 체크
-  const isCurrentPagePremiumRequired = PREMIUM_REQUIRED_PAGES.includes(currentPage);
-  const canViewCurrentPage = !isCurrentPagePremiumRequired || isPremium;
-
-  // 페이지 버튼 생성 (최대 5개 표시)
-  const getPageNumbers = () => {
-    const pages: number[] = [];
-    const maxButtons = 5;
-
-    if (totalPages <= maxButtons) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push(-1); // ... 표시용
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push(-1);
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push(-1);
-        pages.push(currentPage - 1);
-        pages.push(currentPage);
-        pages.push(currentPage + 1);
-        pages.push(-1);
-        pages.push(totalPages);
-      }
-    }
-
-    return pages;
-  };
+  // 구름 타점 — 5m · 30m · 1h · 4h 모두 구름 위
+  const sectionCloud = filteredResults.filter(r =>
+    r.cloudStatus5m  === 'above' &&
+    r.cloudStatus30m === 'above' &&
+    r.cloudStatus    === 'above' &&
+    r.cloudStatus4h  === 'above'
+  );
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -375,317 +338,181 @@ export default function AnalysisPage() {
 
         {/* Results */}
         {results && (
-          <div ref={resultsRef} className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-            <div className="p-3 sm:p-6 border-b border-zinc-800">
-              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                <h2 className="text-base sm:text-lg font-bold text-white">분석 결과</h2>
-                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-                  <div className="text-xs sm:text-sm">
-                    <span className="text-zinc-400">전체: </span>
-                    <span className="text-white font-medium">{results.totalAnalyzed}</span>
-                  </div>
-                  <div className="text-xs sm:text-sm">
-                    <span className="text-zinc-400">발견: </span>
-                    <span className="text-green-500 font-bold">{results.foundCount}</span>
-                  </div>
-                  <div className="text-xs sm:text-sm">
-                    <span className="text-zinc-400">업비트: </span>
-                    <span className="text-purple-400 font-medium">
-                      {results.results.filter(r => r.exchange === 'upbit').length}
-                    </span>
-                  </div>
-                  <div className="text-xs sm:text-sm">
-                    <span className="text-zinc-400">빗썸: </span>
-                    <span className="text-blue-400 font-medium">
-                      {results.results.filter(r => r.exchange === 'bithumb').length}
-                    </span>
-                  </div>
+          <div ref={resultsRef} className="space-y-4">
+
+            {/* Stats + Cache Status */}
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-xs sm:text-sm">
+                  <span className="text-zinc-400">전체 <span className="text-white font-medium">{results.totalAnalyzed}</span></span>
+                  <span className="text-zinc-400">발견 <span className="text-green-500 font-bold">{results.foundCount}</span></span>
+                  <span className="text-zinc-400">업비트 <span className="text-purple-400 font-medium">{results.results.filter(r => r.exchange === 'upbit').length}</span></span>
+                  <span className="text-zinc-400">빗썸 <span className="text-blue-400 font-medium">{results.results.filter(r => r.exchange === 'bithumb').length}</span></span>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-zinc-400">
+                  {results.totalAnalyzed === 0 ? (
+                    <><div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />{results.message || '분석 준비 중...'}</>
+                  ) : results.analyzing ? (
+                    <><div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />백그라운드 분석 중...</>
+                  ) : (
+                    <><div className="w-2 h-2 rounded-full bg-green-500" />최신 데이터</>
+                  )}
+                  {results.cacheAge !== undefined && results.totalAnalyzed > 0 && (
+                    <><span className="text-zinc-600">•</span>{formatCacheAge(results.cacheAge)}</>
+                  )}
                 </div>
               </div>
 
-              {/* Cache Status */}
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  {results.totalAnalyzed === 0 ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                      <span className="text-zinc-400">{results.message || '분석 준비 중...'}</span>
-                    </>
-                  ) : results.analyzing ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-zinc-400">백그라운드 분석 중...</span>
-                    </>
-                  ) : results.cached ? (
-                    <>
-                      <div className={`w-2 h-2 rounded-full ${results.stale ? 'bg-yellow-500' : 'bg-green-500'}`} />
-                      <span className="text-zinc-400">
-                        {results.stale ? '갱신 중...' : '최신 데이터'}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-zinc-400">분석 완료</span>
-                    </>
-                  )}
-                </div>
-                {results.cacheAge !== undefined && results.totalAnalyzed > 0 && (
-                  <>
-                    <span className="text-zinc-500">•</span>
-                    <span className="text-zinc-400">
-                      업데이트: {formatCacheAge(results.cacheAge)}
-                    </span>
-                  </>
+              {/* Search */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="종목 검색... (예: BTC, ETH)"
+                  className="w-full bg-zinc-800 text-white placeholder-zinc-500 rounded-lg px-4 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Search Input */}
-            {results.foundCount > 0 && (
-              <div className="p-3 sm:p-4 border-b border-zinc-800">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="종목 검색... (예: BTC, ETH)"
-                    className="w-full bg-zinc-800 text-white placeholder-zinc-500 rounded-lg px-4 py-2.5 sm:py-3 pl-10 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
-                  />
-                  <svg
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-zinc-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
-                    >
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                {searchQuery && (
-                  <div className="mt-2 text-xs sm:text-sm text-zinc-400">
-                    검색 결과: <span className="text-yellow-500 font-medium">{filteredResults.length}</span>개
+            {/* 2x2 Section Grid */}
+            {results.totalAnalyzed > 0 && (() => {
+              // 공통 코인 행 컴포넌트
+              const CoinRow = ({ result }: { result: MultiTimeframeResult }) => (
+                <div
+                  key={`${result.exchange}-${result.symbol}`}
+                  onClick={() => setSelectedCoin(result)}
+                  className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer transition-colors last:border-b-0"
+                >
+                  <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                    <span className="text-[9px] font-bold text-yellow-500">{result.symbol.slice(0, 2)}</span>
                   </div>
-                )}
-              </div>
-            )}
-
-            {results.foundCount > 0 ? (
-              filteredResults.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                        <th className="text-left text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">종목</th>
-                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">5분</th>
-                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">30분</th>
-                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">1시간</th>
-                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">4시간</th>
-                        <th className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">일봉</th>
-                        <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden md:table-cell">현재가</th>
-                        <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden lg:table-cell">거래대금</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!canViewCurrentPage ? (
-                        // 프리미엄 필요 - 잠금 표시
-                        <tr>
-                          <td colSpan={7} className="p-8 sm:p-12">
-                            <div className="text-center">
-                              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-yellow-500/10 mb-4">
-                                <svg className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                              </div>
-                              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">프리미엄 전용 콘텐츠</h3>
-                              <p className="text-sm sm:text-base text-zinc-400 mb-6">
-                                1-2페이지의 상위 종목은 프리미엄 회원만 확인할 수 있습니다
-                              </p>
-                              {user ? (
-                                <button className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors">
-                                  프리미엄 업그레이드
-                                </button>
-                              ) : (
-                                <div className="space-y-3">
-                                  <p className="text-sm text-zinc-500">로그인 후 프리미엄 혜택을 확인하세요</p>
-                                  <button
-                                    onClick={() => {/* 로그인 모달 열기 */}}
-                                    className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors"
-                                  >
-                                    로그인하기
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        // 일반 유저 또는 프리미엄 유저 - 데이터 표시
-                        currentPageResults.map((result) => (
-                      <tr
-                        key={`${result.exchange}-${result.symbol}`}
-                        onClick={() => setSelectedCoin(result)}
-                        className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors cursor-pointer"
-                      >
-                        <td className="p-2 sm:p-4">
-                          <div className="flex items-center gap-1.5 sm:gap-3">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-                              <span className="text-[9px] sm:text-xs font-bold text-yellow-500">
-                                {result.symbol.slice(0, 2)}
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[11px] sm:text-sm font-medium text-white flex items-center gap-1 sm:gap-2 flex-wrap">
-                                <span className="truncate">{result.symbol}</span>
-                                {isBinanceAlpha(result.symbol) && (
-                                  <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold whitespace-nowrap">
-                                    ALPHA
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[9px] sm:text-xs text-zinc-400">
-                                {result.exchange === 'upbit' ? '업비트' : '빗썸'}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Timeframe indicators */}
-                        {(['5m', '30m', '1h', '4h', '1d'] as const).map(tf => (
-                          <td key={tf} className="text-center px-1 py-2 sm:px-2">
-                            <div
-                              className={`inline-flex items-center justify-center w-6 h-6 rounded ${getTimeframeColor(result.timeframes[tf])} text-[10px] font-bold`}
-                              title={result.timeframes[tf].hasBox && result.timeframes[tf].position ? getPositionLabel(result.timeframes[tf].position) : undefined}
-                            >
-                              {getTimeframeIcon(result.timeframes[tf])}
-                            </div>
-                          </td>
-                        ))}
-
-                        <td className="text-right p-2 sm:p-4 hidden md:table-cell">
-                          <div className="text-xs sm:text-sm text-white font-medium">
-                            ₩{formatNumber(result.currentPrice)}
-                          </div>
-                        </td>
-                        <td className="text-right p-2 sm:p-4 hidden lg:table-cell">
-                          <div className="text-xs sm:text-sm text-zinc-400">
-                            ₩{formatVolume(result.volume)}
-                          </div>
-                        </td>
-                      </tr>
-                        ))
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-white truncate">{result.symbol}</span>
+                      {isBinanceAlpha(result.symbol) && (
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0">ALPHA</span>
                       )}
-                    </tbody>
-                  </table>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="p-4 sm:p-6 border-t border-zinc-800">
-                      <div className="flex items-center justify-between flex-wrap gap-3">
-                        {/* 이전 버튼 */}
-                        <button
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={currentPage === 1}
-                          className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors text-sm sm:text-base"
-                        >
-                          ← 이전
-                        </button>
-
-                        {/* 페이지 번호 */}
-                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
-                          {getPageNumbers().map((page, index) => {
-                            if (page === -1) {
-                              return (
-                                <span key={`ellipsis-${index}`} className="px-2 text-zinc-500">
-                                  ...
-                                </span>
-                              );
-                            }
-
-                            const isPremiumPage = PREMIUM_REQUIRED_PAGES.includes(page);
-                            const isLocked = isPremiumPage && !isPremium;
-
-                            return (
-                              <button
-                                key={page}
-                                onClick={() => handlePageChange(page)}
-                                disabled={isLocked}
-                                className={`
-                                  w-8 h-8 sm:w-10 sm:h-10 rounded-lg font-medium text-sm sm:text-base transition-colors relative
-                                  ${currentPage === page
-                                    ? 'bg-yellow-500 text-black'
-                                    : isLocked
-                                      ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'
-                                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
-                                  }
-                                `}
-                                title={isLocked ? '프리미엄 전용' : undefined}
-                              >
-                                {isLocked ? (
-                                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                                  </svg>
-                                ) : (
-                                  page
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* 다음 버튼 */}
-                        <button
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          disabled={currentPage === totalPages}
-                          className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors text-sm sm:text-base"
-                        >
-                          다음 →
-                        </button>
+                    </div>
+                    <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
+                  </div>
+                  <div className="flex gap-0.5 shrink-0">
+                    {(['5m', '30m', '1h', '4h', '1d'] as const).map(tf => (
+                      <div
+                        key={tf}
+                        className={`w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold ${getTimeframeColor(result.timeframes[tf])}`}
+                        title={result.timeframes[tf].hasBox ? getPositionLabel(result.timeframes[tf].position) : tf}
+                      >
+                        {getTimeframeIcon(result.timeframes[tf])}
                       </div>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-white font-mono shrink-0 text-right w-16 sm:w-20">
+                    ₩{formatNumber(result.currentPrice)}
+                  </div>
+                </div>
+              );
 
-                      {/* 페이지 정보 */}
-                      <div className="mt-3 sm:mt-4 text-center text-xs sm:text-sm text-zinc-400">
-                        {startIndex + 1}-{Math.min(endIndex, filteredResults.length)} / 총 {filteredResults.length}개
+              // 섹션 카드 헬퍼
+              const SectionCard = ({
+                title, desc, accent, icon, items, empty,
+              }: {
+                title: string; desc: string; accent: string; icon: string;
+                items: MultiTimeframeResult[]; empty?: string;
+              }) => (
+                <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
+                  <div className={`p-3 sm:p-4 border-b border-zinc-800 ${accent} rounded-t-lg`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{icon}</span>
+                          <h3 className="text-sm font-bold text-white">{title}</h3>
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{items.length}</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">{desc}</p>
                       </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-6 sm:p-8 text-center">
-                  <div className="text-zinc-500">
-                    <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <p className="text-xs sm:text-sm">"{searchQuery}"에 대한 검색 결과가 없습니다</p>
-                    <p className="text-[10px] sm:text-xs mt-1">다른 종목명으로 검색해보세요</p>
+                  </div>
+                  <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                    {items.length > 0 ? (
+                      items.map(r => <CoinRow key={`${r.exchange}-${r.symbol}`} result={r} />)
+                    ) : (
+                      <div className="p-6 text-center text-xs text-zinc-500">{empty || '해당 종목 없음'}</div>
+                    )}
                   </div>
                 </div>
-              )
-            ) : (
-              <div className="p-6 sm:p-8 text-center">
-                <div className="text-zinc-500">
-                  <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p className="text-xs sm:text-sm">박스권을 형성한 종목이 없습니다</p>
-                  <p className="text-[10px] sm:text-xs mt-1">조건을 만족하는 종목이 발견되지 않았습니다</p>
+              );
+
+              return (
+                <div className="space-y-4">
+                  {/* Row 1: 타임프레임별 돌파 타점 (4열) */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <SectionCard
+                      title="5분봉 타점"
+                      desc="5m 박스권 상단 돌파"
+                      icon="⚡"
+                      accent="border-b-orange-500/30"
+                      items={section5m}
+                      empty="해당 종목 없음"
+                    />
+                    <SectionCard
+                      title="30분봉 타점"
+                      desc="30m 박스권 상단 돌파"
+                      icon="🔥"
+                      accent="border-b-orange-400/30"
+                      items={section30m}
+                      empty="해당 종목 없음"
+                    />
+                    <SectionCard
+                      title="1시간봉 타점"
+                      desc="1h 박스권 상단 돌파"
+                      icon="🚀"
+                      accent="border-b-yellow-500/30"
+                      items={section1h}
+                      empty="해당 종목 없음"
+                    />
+                    <SectionCard
+                      title="4시간봉 타점"
+                      desc="4h 박스권 상단 돌파"
+                      icon="💎"
+                      accent="border-b-green-500/30"
+                      items={section4h}
+                      empty="해당 종목 없음"
+                    />
+                  </div>
+
+                  {/* Row 2: 구름 타점 + 스윙 타점 (2열) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SectionCard
+                      title="구름 타점"
+                      desc="5m · 30m · 1h · 4h 모두 일목구름 위"
+                      icon="☁️"
+                      accent="border-b-purple-500/30"
+                      items={sectionCloud}
+                      empty="4개 타임프레임 모두 구름 위인 종목 없음"
+                    />
+                    <SectionCard
+                      title="스윙 타점"
+                      desc="현재가 > 1h MA50 · 5m MA50"
+                      icon="📈"
+                      accent="border-b-blue-500/30"
+                      items={sectionSwing}
+                      empty="MA50 우상향 종목 없음"
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

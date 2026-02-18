@@ -92,7 +92,10 @@ interface MultiTimeframeResult {
   };
   boxCount: number; // 박스권 형성된 시간대 개수
   allTimeframes: boolean; // 모든 시간대에서 박스권 형성
-  goldenAlignment?: boolean; // 1시간봉 정배열 (MA50 > MA110 > MA180)
+  above1hMA50?: boolean;             // 현재가 > 1h MA50
+  above5mMA50?: boolean;             // 현재가 > 5m MA50
+  cloudStatus5m?: 'above' | 'near';  // 5m 구름 위 or 구름 2% 이내 아래
+  cloudStatus30m?: 'above' | 'near'; // 30m 구름 위 or 구름 2% 이내 아래
   cloudStatus?: 'above' | 'near';   // 1h 구름 위 or 구름 2% 이내 아래(주목)
   cloudStatus4h?: 'above' | 'near'; // 4h 구름 위 or 구름 2% 이내 아래(주목)
   volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
@@ -143,17 +146,6 @@ function detectMA50Uptrend(candles: any[]): { isUptrend: boolean; slope?: number
   };
 }
 
-// 1시간봉 정배열 판별: MA50 > MA110 > MA180
-function detectGoldenAlignment(candles: any[]): boolean {
-  if (candles.length < 180) return false;
-  const closes: number[] = candles.map((c: any) => c.close);
-  const N = closes.length;
-  const sum = (arr: number[]) => arr.reduce((s, v) => s + v, 0);
-  const ma50  = sum(closes.slice(N - 50 )) / 50;
-  const ma110 = sum(closes.slice(N - 110)) / 110;
-  const ma180 = sum(closes.slice(N - 180)) / 180;
-  return ma50 > ma110 && ma110 > ma180;
-}
 
 // 일목구름 대비 현재가 상태 반환
 // 'above' : 구름 위  (통과)
@@ -307,9 +299,6 @@ async function performAnalysis() {
 
           const currentPrice = candles1h[candles1h.length - 1].close;
 
-          // ─ 정배열 여부 계산 (필터 아님 — 정렬 우선순위에만 사용) ──────────
-          const goldenAlignment = detectGoldenAlignment(candles1h);
-
           // ─ 사전 필터: 1h 일목구름 상태 확인 ──────────────────────────────
           // 'above': 구름 위 (통과)
           // 'near' : 구름 상단 2% 이내 아래 (주목으로 통과)
@@ -325,11 +314,23 @@ async function performAnalysis() {
             return filtered;
           }
 
-          // ─ 4h 일목구름 상태 확인 (필터 없음 — 정렬 가중치에만 사용) ────────
-          const cloudStatus4h = getIchimokuCloudStatus(candles4h, currentPrice);
+          // ─ 4h / 5m / 30m 일목구름 상태 확인 (필터 없음 — 섹션 분류에 사용) ──
+          const cloudStatus4h  = getIchimokuCloudStatus(candles4h,  currentPrice);
+          const cloudStatus5m  = getIchimokuCloudStatus(candles5m,  currentPrice);
+          const cloudStatus30m = getIchimokuCloudStatus(candles30m, currentPrice);
 
           // 1시간봉 거래량 급증 탐지
           const volumeSpike = detectVolumeSpike(candles1h, 20);
+
+          // MA50 현재가 비교 (1h, 5m)
+          const getMA50 = (candles: any[]) =>
+            candles.length >= 50
+              ? candles.slice(-50).reduce((s: number, c: any) => s + c.close, 0) / 50
+              : null;
+          const ma50_1h = getMA50(candles1h);
+          const ma50_5m = getMA50(candles5m);
+          const above1hMA50 = ma50_1h !== null && currentPrice > ma50_1h;
+          const above5mMA50 = ma50_5m !== null && currentPrice > ma50_5m;
 
           // 1시간봉 MA50 우상향 추세 판별
           const ma50Analysis = detectMA50Uptrend(candles1h);
@@ -415,7 +416,10 @@ async function performAnalysis() {
             timeframes,
             boxCount,
             allTimeframes,
-            goldenAlignment,
+            above1hMA50,
+            above5mMA50,
+            cloudStatus5m:  cloudStatus5m  === 'below' ? undefined : cloudStatus5m,
+            cloudStatus30m: cloudStatus30m === 'below' ? undefined : cloudStatus30m,
             cloudStatus,
             cloudStatus4h: cloudStatus4h === 'below' ? undefined : cloudStatus4h,
             volumeSpike,
@@ -476,26 +480,19 @@ async function performAnalysis() {
       `box patterns: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`
     );
 
-    // ─ 6-티어 우선순위 ─────────────────────────────────────────────────────
-    // Tier 6: 1h above + 4h above + 정배열  (최고)
-    // Tier 5: 1h above + 4h above
-    // Tier 4: 1h above + 4h near  + 정배열
-    // Tier 3: 1h above + 정배열   (4h above/near 아님)
-    // Tier 2: 1h above            (정배열 없음)
-    // Tier 1: 1h near  + 정배열
-    // Tier 0: 1h near             (정배열 없음)
+    // ─ 4-티어 우선순위 ─────────────────────────────────────────────────────
+    // Tier 3: 1h above + 4h above  (최고)
+    // Tier 2: 1h above + 4h near
+    // Tier 1: 1h above
+    // Tier 0: 1h near
     const priorityScore = (r: MultiTimeframeResult): number => {
-      const h1 = r.cloudStatus;          // 'above' | 'near' | undefined
-      const h4 = r.cloudStatus4h;        // 'above' | 'near' | undefined
-      const ga = r.goldenAlignment ?? false;
+      const h1 = r.cloudStatus;
+      const h4 = r.cloudStatus4h;
 
-      if (h1 === 'above' && h4 === 'above' && ga) return 6;
-      if (h1 === 'above' && h4 === 'above')        return 5;
-      if (h1 === 'above' && h4 === 'near'  && ga)  return 4;
-      if (h1 === 'above' && ga)                    return 3;
-      if (h1 === 'above')                          return 2;
-      if (h1 === 'near'  && ga)                    return 1;
-      return 0; // h1 === 'near', no golden
+      if (h1 === 'above' && h4 === 'above') return 3;
+      if (h1 === 'above' && h4 === 'near')  return 2;
+      if (h1 === 'above')                   return 1;
+      return 0;
     };
 
     validResults.sort((a, b) => {
