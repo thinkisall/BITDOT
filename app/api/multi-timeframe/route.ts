@@ -2,42 +2,32 @@
 import { fetchUpbitCandles5M, fetchUpbitCandles30M, fetchUpbitCandles, fetchUpbitCandles4H, fetchUpbitCandles1D } from "@/lib/upbitCandles";
 import { fetchBithumbCandles5M, fetchBithumbCandles30M, fetchBithumbCandles, fetchBithumbCandles4H, fetchBithumbCandles1D } from "@/lib/bithumbCandles";
 import { findSupportResistanceLevels, detectBoxRanges } from "@/lib/supportResistance";
-import { fetchAllMarkets } from "@/lib/markets";
+import { fetchBithumbMarkets } from "@/lib/markets";
 
-// ─── Token Bucket Rate Limiter ───────────────────────────────────────────────
-// API 레이트 리밋을 초과하지 않으면서 최대한 빠르게 요청
-class TokenBucket {
-  private tokens: number;
-  private lastRefill: number;
+// ─── Queue Rate Limiter ───────────────────────────────────────────────────────
+// 동시 호출 시 각 consumer에게 고유한 time slot 부여 → 진짜 순차 제한
+// (기존 TokenBucket은 Promise.all 동시 호출 시 모두 같은 대기 후 한꺼번에 폭발하는 버그)
+class RateLimiter {
+  private nextSlot: number = Date.now();
 
-  constructor(
-    private readonly capacity: number,
-    private readonly refillPerSecond: number
-  ) {
-    this.tokens = capacity;
-    this.lastRefill = Date.now();
-  }
+  constructor(private readonly intervalMs: number) {}
 
   async consume(): Promise<void> {
     const now = Date.now();
-    const elapsed = (now - this.lastRefill) / 1000;
-    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillPerSecond);
-    this.lastRefill = now;
-
-    if (this.tokens < 1) {
-      const waitMs = ((1 - this.tokens) / this.refillPerSecond) * 1000;
-      await new Promise(r => setTimeout(r, Math.ceil(waitMs)));
-      this.tokens = 0;
-    } else {
-      this.tokens -= 1;
+    if (this.nextSlot <= now) {
+      this.nextSlot = now + this.intervalMs;
+      return; // 대기 불필요
     }
+    const wait = this.nextSlot - now;
+    this.nextSlot += this.intervalMs; // await 전에 증가 → 다음 호출은 다른 슬롯 배정
+    await new Promise(r => setTimeout(r, wait));
   }
 }
 
-// 업비트: 최대 2 심볼/초 (= 10 API호출/초, 리밋 내)
-// 빗썸:  최대 3 심볼/초 (= 15 API호출/초, 리밋 내)
-const upbitBucket = new TokenBucket(2, 2);
-const bithumbBucket = new TokenBucket(3, 3);
+// 업비트: 1000ms 간격 (2-phase fetch로 평균 API 호출 ~1.5개/심볼 → 90 호출/분, 한도 200 이내)
+// 빗썸:  600ms 간격
+const upbitLimiter  = new RateLimiter(1000);
+const bithumbLimiter = new RateLimiter(600);
 
 // ─── 심볼별 결과 캐시 (25분 TTL) ─────────────────────────────────────────────
 // 매 5분 주기에서 캐시가 살아있는 종목은 API 호출 없이 이전 결과 재사용
@@ -99,6 +89,10 @@ interface MultiTimeframeResult {
   cloudStatus?: 'above' | 'near';   // 1h 구름 위 or 구름 2% 이내 아래(주목)
   cloudStatus4h?: 'above' | 'near'; // 4h 구름 위 or 구름 2% 이내 아래(주목)
   volumeSpike?: VolumeSpike; // 거래량 급증 정보 (20배 이상)
+  ma110?: number;                               // VWMA110
+  ma50?: number;                                // SMA50
+  isTriggered?: boolean;                                       // 최근 7일 내 기준봉 발생
+  pullbackSignal?: 'TREND_110' | 'SUPPORT_50' | 'SUPPORT_180'; // 눌림목 신호
   watchlist?: { // 관심종목 (1시간봉 MA50 우상향)
     isUptrend: boolean;
     slope: number; // 기울기 퍼센트
@@ -231,32 +225,135 @@ function detectVolumeSpike(candles: any[], threshold: number = 20): VolumeSpike 
   return undefined;
 }
 
+// 일봉 기반 눌림목 분석
+// - 기준봉 조건: 최근 7일 이내 장대양봉(몸통 7% 이상) + 거래량 10배 이상
+// - TREND_110: 현재가 > VWMA110 AND VWMA110 우상향 (5일 전보다 현재 VWMA110 높음)
+// - SUPPORT_50: 현재가 ≈ SMA50 (±3%) AND SMA50 횡보 or 우상향 (5일 전 이상)
+function analyzePullback(
+  candles: any[],
+  currentPrice: number
+): { ma110: number | null; ma50: number | null; isTriggered: boolean; pullbackSignal: 'TREND_110' | 'SUPPORT_50' | 'SUPPORT_180' | null } {
+  const LOOKBACK_DAYS = 7;
+  const VOL_MULTIPLIER = 10;
+  const BODY_THRESHOLD = 0.07;
+
+  if (candles.length < 115) return { ma110: null, ma50: null, isTriggered: false, pullbackSignal: null };
+
+  // VWMA (거래량 가중 이동평균) 계산
+  const getVWMA = (slice: any[]) => {
+    const totalVol = slice.reduce((s: number, c: any) => s + c.volume, 0);
+    if (totalVol === 0) return slice.reduce((s: number, c: any) => s + c.close, 0) / slice.length;
+    return slice.reduce((s: number, c: any) => s + c.close * c.volume, 0) / totalVol;
+  };
+  const getSMA = (slice: any[]) =>
+    slice.reduce((s: number, c: any) => s + c.close, 0) / slice.length;
+
+  // VWMA110: 현재 vs 5일 전
+  const vwma110 = getVWMA(candles.slice(-110));
+  const vwma110Prev = candles.length >= 115 ? getVWMA(candles.slice(-115, -5)) : null;
+
+  // SMA50: 현재 vs 5일 전
+  const sma50 = candles.length >= 50 ? getSMA(candles.slice(-50)) : null;
+  const sma50Prev = candles.length >= 55 ? getSMA(candles.slice(-55, -5)) : null;
+
+  // SMA180: 현재 vs 5일 전
+  const sma180 = candles.length >= 180 ? getSMA(candles.slice(-180)) : null;
+  const sma180Prev = candles.length >= 185 ? getSMA(candles.slice(-185, -5)) : null;
+
+  // 기준봉 탐지: 최근 7일 이내 (오늘 제외)
+  const avgVol = candles.slice(-20).reduce((s: number, c: any) => s + c.volume, 0) / 20;
+  const recentCandles = candles.slice(-(LOOKBACK_DAYS + 1), -1);
+
+  const isTriggered =
+    avgVol > 0 &&
+    recentCandles.some((c: any) => {
+      if (c.open <= 0) return false;
+      const bodyPct = (c.close - c.open) / c.open;
+      return bodyPct >= BODY_THRESHOLD && c.volume >= avgVol * VOL_MULTIPLIER;
+    });
+
+  if (!isTriggered) return { ma110: vwma110, ma50: sma50, isTriggered: false, pullbackSignal: null };
+
+  // Signal 1: TREND_110 — 현재가 > VWMA110 AND VWMA110 우상향 (5일 전보다 높음)
+  const isTrend110 =
+    currentPrice > vwma110 &&
+    vwma110Prev !== null && vwma110 > vwma110Prev;
+
+  // Signal 2: SUPPORT_50 — 현재가 ≈ SMA50 (±3%) AND SMA50 횡보 or 우상향
+  const isSupport50 =
+    sma50 !== null &&
+    currentPrice >= sma50 * 0.97 &&
+    currentPrice <= sma50 * 1.03 &&
+    sma50Prev !== null && sma50 >= sma50Prev;
+
+  // Signal 3: SUPPORT_180 — 현재가 ≈ SMA180 (±3%) AND SMA180 횡보 or 우상향
+  const isSupport180 =
+    sma180 !== null &&
+    currentPrice >= sma180 * 0.97 &&
+    currentPrice <= sma180 * 1.03 &&
+    sma180Prev !== null && sma180 >= sma180Prev;
+
+  let pullbackSignal: 'TREND_110' | 'SUPPORT_50' | 'SUPPORT_180' | null = null;
+  if (isTrend110)    pullbackSignal = 'TREND_110';
+  else if (isSupport50)  pullbackSignal = 'SUPPORT_50';
+  else if (isSupport180) pullbackSignal = 'SUPPORT_180';
+
+  return { ma110: vwma110, ma50: sma50, isTriggered: true, pullbackSignal };
+}
+
 // 실제 분석 수행 함수
 async function performAnalysis() {
   try {
     isAnalyzing = true;
     console.log('Starting multi-timeframe analysis...');
     // 마켓 목록 (5분 캐시, scan/multi-timeframe 공유)
-    const allMarkets = await fetchAllMarkets();
-
-    // 디버깅: 업비트와 빗썸 종목 수 확인
-    const upbitCount = allMarkets.filter(m => m.exchange === 'upbit').length;
-    const bithumbCount = allMarkets.filter(m => m.exchange === 'bithumb').length;
-    console.log(`Total markets: ${allMarkets.length} (Upbit: ${upbitCount}, Bithumb: ${bithumbCount})`);
+    const bithumbMarkets = await fetchBithumbMarkets();
+    console.log(`Bithumb markets: ${bithumbMarkets.length}`);
 
     // 5. 각 종목의 모든 시간대 스캔
-    // - 심볼 캐시 히트 시 API 호출 없이 이전 결과 재사용 (API 호출 ~80% 감소)
-    // - Token Bucket으로 캐시 미스 심볼만 속도 제어
-    // - BATCH_SIZE 확대: 대부분이 캐시 히트라 충분히 빠름
+    // - 2-phase fetch: 1h 먼저 → cloud 필터 통과 시에만 나머지 4개 fetch
+    //   → 평균 API 호출 ~1.5개/심볼 (기존 5개 대비 70% 감소)
+    // - 배치 완료마다 중간 결과 캐시 저장 → 첫 배치 후 즉시 결과 표시
     const BATCH_SIZE = 10;
-    const DELAY_MS = 100; // 캐시 히트 배치는 거의 즉시 완료되므로 짧게
+    const DELAY_MS = 50;
     const results: MultiTimeframeResult[] = [];
+
+    // 정렬 함수 (중간 캐시 업데이트에도 재사용)
+    const sortResults = (arr: MultiTimeframeResult[]) => arr.sort((a, b) => {
+      const score = (r: MultiTimeframeResult) => {
+        const h1 = r.cloudStatus, h4 = r.cloudStatus4h;
+        if (h1 === 'above' && h4 === 'above') return 3;
+        if (h1 === 'above' && h4 === 'near')  return 2;
+        if (h1 === 'above')                   return 1;
+        return 0;
+      };
+      const sd = score(b) - score(a);
+      if (sd !== 0) return sd;
+      if (b.volume !== a.volume) return b.volume - a.volume;
+      return b.boxCount - a.boxCount;
+    });
+
+    // 429 재시도 헬퍼
+    const fetchWithRetry = async <T>(fn: () => Promise<T>, symbol: string): Promise<T> => {
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          return await fn();
+        } catch (e: any) {
+          if (e.message?.includes('429') && attempt < 2) {
+            const delay = 5000 * (attempt + 1);
+            console.warn(`429 (${symbol}), ${delay}ms 후 재시도...`);
+            await new Promise(r => setTimeout(r, delay));
+          } else throw e;
+        }
+      }
+      throw new Error('unreachable');
+    };
 
     let cacheHits = 0;
     let cacheMisses = 0;
 
-    for (let i = 0; i < allMarkets.length; i += BATCH_SIZE) {
-      const batch = allMarkets.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < bithumbMarkets.length; i += BATCH_SIZE) {
+      const batch = bithumbMarkets.slice(i, i + BATCH_SIZE);
 
       const batchResults = await Promise.all(
         batch.map(async (item) => {
@@ -270,49 +367,70 @@ async function performAnalysis() {
           }
           cacheMisses++;
 
-          // ─ Token Bucket: 캐시 미스 심볼만 레이트 리밋 적용 ────────────────
+          // ─ Rate Limiter: 캐시 미스 심볼만 레이트 리밋 적용 ───────────────
           if (item.exchange === 'upbit') {
-            await upbitBucket.consume();
+            await upbitLimiter.consume();
           } else {
-            await bithumbBucket.consume();
+            await bithumbLimiter.consume();
           }
 
-          let candles5m, candles30m, candles1h, candles4h, candles1d;
-
-          if (item.exchange === 'upbit') {
-            [candles5m, candles30m, candles1h, candles4h, candles1d] = await Promise.all([
-              fetchUpbitCandles5M(item.market, 250),
-              fetchUpbitCandles30M(item.market, 250),
-              fetchUpbitCandles(item.market, 250),
-              fetchUpbitCandles4H(item.market, 100),
-              fetchUpbitCandles1D(item.market, 100),
-            ]);
-          } else {
-            [candles5m, candles30m, candles1h, candles4h, candles1d] = await Promise.all([
-              fetchBithumbCandles5M(item.symbol, 250),
-              fetchBithumbCandles30M(item.symbol, 250),
-              fetchBithumbCandles(item.symbol, 250),
-              fetchBithumbCandles4H(item.symbol, 100),
-              fetchBithumbCandles1D(item.symbol, 100),
-            ]);
-          }
+          // ─ Phase 1: 1h + 1d 동시 fetch ───────────────────────────────────
+          // 1d는 cloud 필터 전에 기준봉 분석 실행 (cloud below 종목도 기준봉 탐지)
+          let candles1h: any[], candles1d: any[];
+          [candles1h, candles1d] = await fetchWithRetry(
+            () => item.exchange === 'upbit'
+              ? Promise.all([
+                  fetchUpbitCandles(item.market, 250),
+                  fetchUpbitCandles1D(item.market, 200),
+                ])
+              : Promise.all([
+                  fetchBithumbCandles(item.symbol, 250),
+                  fetchBithumbCandles1D(item.symbol, 200),
+                ]),
+            item.symbol
+          );
 
           const currentPrice = candles1h[candles1h.length - 1].close;
+
+          // 기준봉 분석: cloud 필터 전에 실행 → 모든 종목 대상
+          const pullback = analyzePullback(candles1d, currentPrice);
 
           // ─ 사전 필터: 1h 일목구름 상태 확인 ──────────────────────────────
           // 'above': 구름 위 (통과)
           // 'near' : 구름 상단 2% 이내 아래 (주목으로 통과)
-          // 'below': 구름 상단 2% 이상 아래 (제외)
+          // 'below': 구름 상단 2% 이상 아래 (제외) → 기준봉 정보만 저장 후 종료
           const cloudStatus = getIchimokuCloudStatus(candles1h, currentPrice);
           if (cloudStatus === 'below') {
             const filtered: MultiTimeframeResult = {
               symbol: item.symbol, exchange: item.exchange, volume: item.volume,
               currentPrice, boxCount: 0, allTimeframes: false,
               timeframes: { '5m': { hasBox: false }, '30m': { hasBox: false }, '1h': { hasBox: false }, '4h': { hasBox: false }, '1d': { hasBox: false } },
+              ma110: pullback.ma110 ?? undefined,
+              ma50: pullback.ma50 ?? undefined,
+              isTriggered: pullback.isTriggered,
+              pullbackSignal: pullback.pullbackSignal ?? undefined,
             };
             symbolCache.set(cacheKey, { result: filtered, timestamp: Date.now() });
             return filtered;
           }
+
+          // ─ Phase 2: 나머지 3개 타임프레임 fetch (cloud 통과 종목만) ──────
+          // 1d는 Phase 1에서 이미 fetch
+          let candles5m: any[], candles30m: any[], candles4h: any[];
+          [candles5m, candles30m, candles4h] = await fetchWithRetry(
+            () => item.exchange === 'upbit'
+              ? Promise.all([
+                  fetchUpbitCandles5M(item.market, 250),
+                  fetchUpbitCandles30M(item.market, 250),
+                  fetchUpbitCandles4H(item.market, 100),
+                ])
+              : Promise.all([
+                  fetchBithumbCandles5M(item.symbol, 250),
+                  fetchBithumbCandles30M(item.symbol, 250),
+                  fetchBithumbCandles4H(item.symbol, 100),
+                ]),
+            item.symbol
+          );
 
           // ─ 4h / 5m / 30m 일목구름 상태 확인 (필터 없음 — 섹션 분류에 사용) ──
           const cloudStatus4h  = getIchimokuCloudStatus(candles4h,  currentPrice);
@@ -423,6 +541,10 @@ async function performAnalysis() {
             cloudStatus,
             cloudStatus4h: cloudStatus4h === 'below' ? undefined : cloudStatus4h,
             volumeSpike,
+            ma110: pullback.ma110 ?? undefined,
+            ma50: pullback.ma50 ?? undefined,
+            isTriggered: pullback.isTriggered,
+            pullbackSignal: pullback.pullbackSignal ?? undefined,
             watchlist: ma50Analysis.isUptrend ? {
               isUptrend: true,
               slope: ma50Analysis.slope!,
@@ -461,56 +583,40 @@ async function performAnalysis() {
 
       results.push(...batchResults);
 
+      // ─ 배치 완료마다 중간 결과 캐시 업데이트 ───────────────────────────
+      // 첫 배치 완료 후 즉시 결과 표시 (분석 중에도 부분 결과 노출)
+      const partialValid = results.filter(r => r && (r.boxCount > 0 || r.isTriggered));
+      sortResults(partialValid);
+      cachedResults = {
+        results: partialValid,
+        totalAnalyzed: i + batch.length,
+        foundCount: partialValid.length,
+        lastUpdated: Date.now(),
+      };
+
       // 마지막 배치가 아니면 대기
-      if (i + BATCH_SIZE < allMarkets.length) {
+      if (i + BATCH_SIZE < bithumbMarkets.length) {
         await new Promise(resolve => setTimeout(resolve, DELAY_MS));
       }
     }
 
-    // null 제거 및 박스권이 1개 이상 있는 종목만 필터링
-    const validResults = results.filter(r => r && r.boxCount > 0);
+    // 최종 결과 확정
+    const validResults = results.filter(r => r && (r.boxCount > 0 || r.isTriggered));
+    sortResults(validResults);
 
     // 캐시 효율 및 박스권 종목 수 로그
-    const upbitBoxCount = validResults.filter(r => r.exchange === 'upbit').length;
     const bithumbBoxCount = validResults.filter(r => r.exchange === 'bithumb').length;
     console.log(
-      `Analysis done — total: ${allMarkets.length}, ` +
-      `cache hits: ${cacheHits} (${Math.round(cacheHits / allMarkets.length * 100)}%), ` +
+      `Analysis done — total: ${bithumbMarkets.length}, ` +
+      `cache hits: ${cacheHits} (${Math.round(cacheHits / bithumbMarkets.length * 100)}%), ` +
       `misses: ${cacheMisses}, ` +
-      `box patterns: ${validResults.length} (Upbit: ${upbitBoxCount}, Bithumb: ${bithumbBoxCount})`
+      `box patterns: ${validResults.length} (Bithumb: ${bithumbBoxCount})`
     );
 
-    // ─ 4-티어 우선순위 ─────────────────────────────────────────────────────
-    // Tier 3: 1h above + 4h above  (최고)
-    // Tier 2: 1h above + 4h near
-    // Tier 1: 1h above
-    // Tier 0: 1h near
-    const priorityScore = (r: MultiTimeframeResult): number => {
-      const h1 = r.cloudStatus;
-      const h4 = r.cloudStatus4h;
-
-      if (h1 === 'above' && h4 === 'above') return 3;
-      if (h1 === 'above' && h4 === 'near')  return 2;
-      if (h1 === 'above')                   return 1;
-      return 0;
-    };
-
-    validResults.sort((a, b) => {
-      // 1순위: 6-티어 우선순위 점수
-      const scoreDiff = priorityScore(b) - priorityScore(a);
-      if (scoreDiff !== 0) return scoreDiff;
-
-      // 2순위: 거래량 많은 순
-      if (b.volume !== a.volume) return b.volume - a.volume;
-
-      // 3순위: 박스권 개수 많은 순
-      return b.boxCount - a.boxCount;
-    });
-
-    // 캐시에 저장
+    // 최종 캐시 저장
     cachedResults = {
       results: validResults,
-      totalAnalyzed: allMarkets.length,
+      totalAnalyzed: bithumbMarkets.length,
       foundCount: validResults.length,
       lastUpdated: Date.now(),
     };

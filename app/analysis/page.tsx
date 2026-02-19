@@ -52,6 +52,10 @@ interface MultiTimeframeResult {
   cloudStatus?: 'above' | 'near';
   cloudStatus4h?: 'above' | 'near';
   volumeSpike?: VolumeSpike;
+  ma110?: number;
+  ma50?: number;
+  isTriggered?: boolean;
+  pullbackSignal?: 'TREND_110' | 'SUPPORT_50' | 'SUPPORT_180';
   watchlist?: {
     isUptrend: boolean;
     slope: number;
@@ -258,9 +262,14 @@ export default function AnalysisPage() {
     r.cloudStatus4h  === 'above'
   );
 
-  // 실험중 타점 — 구름 무관, 1h + 4h 모두 박스권
-  const sectionLab = filteredResults
-    .filter(r => r.timeframes['1h'].hasBox && r.timeframes['4h'].hasBox)
+  // 기준봉 발생 — 최근 7일 내 기준봉 발생 종목 전체 (눌림목 여부 무관)
+  const sectionTriggered = filteredResults
+    .filter(r => r.isTriggered)
+    .sort((a, b) => b.volume - a.volume);
+
+  // 눌림목 타점 — 기준봉 발생 후 110/180일선 ±2% 이내
+  const sectionPullback = filteredResults
+    .filter(r => r.pullbackSignal)
     .sort((a, b) => b.volume - a.volume);
 
   return (
@@ -512,15 +521,79 @@ export default function AnalysisPage() {
                     />
                   </div>
 
-                  {/* Row 3: 실험중 타점 (전체 너비) */}
-                  <SectionCard
-                    title="실험중 타점"
-                    desc="구름 무관 · 1h + 4h 박스권 동시 형성 (거래량순)"
-                    icon="🧪"
-                    accent="border-b-zinc-600/30"
-                    items={sectionLab}
-                    empty="1h + 4h 박스권 동시 형성 종목 없음"
-                  />
+                  {/* Row 3: 기준봉 발생 + 눌림목 타점 (2열) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* 기준봉 발생 종목 */}
+                    <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
+                      <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-amber-500/30 rounded-t-lg">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm shrink-0">⚡</span>
+                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">기준봉 발생</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionTriggered.length}</span>
+                        </div>
+                        <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">최근 7일 내 장대양봉(몸통 7%+, 거래량 10배+) 발생</p>
+                      </div>
+                      <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+                        {sectionTriggered.length > 0 ? (
+                          sectionTriggered.map(r => <CoinRow key={`${r.exchange}-${r.symbol}`} result={r} />)
+                        ) : (
+                          <div className="p-4 text-center text-[10px] text-zinc-500">기준봉 발생 종목 없음</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 눌림목 타점 */}
+                    <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
+                      <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-green-500/30 rounded-t-lg">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm shrink-0">🧲</span>
+                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">눌림목 타점</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionPullback.length}</span>
+                        </div>
+                        <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">기준봉 발생 후 110/180일선 ±2% 눌림목</p>
+                      </div>
+                      <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+                        {sectionPullback.length > 0 ? (
+                          sectionPullback.map(r => (
+                            <div
+                              key={`${r.exchange}-${r.symbol}`}
+                              onClick={() => setSelectedCoin(r)}
+                              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
+                            >
+                              <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                                <span className="text-[9px] font-bold text-yellow-500">{r.symbol.slice(0, 2)}</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className="text-xs font-bold text-white truncate">{r.symbol}</span>
+                                  {isBinanceAlpha(r.symbol) && (
+                                    <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
+                                  )}
+                                </div>
+                                <div className="text-[9px] text-zinc-500">{r.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
+                              </div>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                                r.pullbackSignal === 'TREND_110'
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : r.pullbackSignal === 'SUPPORT_50'
+                                    ? 'bg-orange-500/20 text-orange-400'
+                                    : 'bg-blue-500/20 text-blue-400'
+                              }`}>
+                                {r.pullbackSignal === 'TREND_110' ? 'MA110 추세'
+                                  : r.pullbackSignal === 'SUPPORT_50' ? 'MA50 지지'
+                                  : 'MA180 지지'}
+                              </span>
+                              <div className="text-[10px] text-white font-mono shrink-0 text-right">
+                                ₩{formatNumber(r.currentPrice)}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-[10px] text-zinc-500">눌림목 조건 종목 없음</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
