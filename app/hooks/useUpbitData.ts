@@ -3,6 +3,27 @@
 import { useEffect, useState, useRef } from 'react';
 import { UpbitMarket, UpbitTicker } from '../types/market';
 
+const MARKETS_CACHE_KEY = 'upbit_markets';
+const MARKETS_CACHE_TTL = 60 * 60 * 1000; // 1시간
+
+function getCachedMarkets(): UpbitMarket[] | null {
+  try {
+    const raw = localStorage.getItem(MARKETS_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > MARKETS_CACHE_TTL) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedMarkets(markets: UpbitMarket[]) {
+  try {
+    localStorage.setItem(MARKETS_CACHE_KEY, JSON.stringify({ data: markets, ts: Date.now() }));
+  } catch {}
+}
+
 export function useUpbitData() {
   const [data, setData] = useState<Map<string, UpbitTicker>>(new Map());
   const [markets, setMarkets] = useState<UpbitMarket[]>([]);
@@ -17,11 +38,12 @@ export function useUpbitData() {
   const reconnectAttempts = useRef(0);
 
   useEffect(() => {
-    const fetchMarkets = async () => {
+    const fetchMarkets = async (): Promise<UpbitMarket[]> => {
       try {
         const response = await fetch('https://api.upbit.com/v1/market/all');
         const allMarkets: UpbitMarket[] = await response.json();
         const krwMarkets = allMarkets.filter(m => m.market.startsWith('KRW-'));
+        setCachedMarkets(krwMarkets);
         setMarkets(krwMarkets);
         return krwMarkets;
       } catch (error) {
@@ -52,7 +74,6 @@ export function useUpbitData() {
     };
 
     const connectWebSocket = (marketList: UpbitMarket[]) => {
-      // 이미 열려있는 소켓이 있으면 닫기
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
@@ -62,48 +83,47 @@ export function useUpbitData() {
 
       ws.onopen = () => {
         console.log('Upbit WebSocket connected');
-        reconnectAttempts.current = 0; // 성공 시 카운터 리셋
+        reconnectAttempts.current = 0;
         setIsConnected(true);
 
-        const subscribeMessage = [
+        ws.send(JSON.stringify([
           { ticket: 'bitdot' },
-          {
-            type: 'ticker',
-            codes: marketList.map(m => m.market),
-          },
-        ];
-
-        ws.send(JSON.stringify(subscribeMessage));
+          { type: 'ticker', codes: marketList.map(m => m.market) },
+        ]));
       };
 
-      ws.onmessage = async (event) => {
-        const blob = event.data;
-        const text = await blob.text();
-        const ticker: UpbitTicker = JSON.parse(text);
+      const processMessage = (text: string) => {
+        try {
+          const ticker: UpbitTicker = JSON.parse(text);
+          if (ticker.type === 'ticker') {
+            const marketCode = ticker.code || ticker.market;
+            if (marketCode) {
+              const symbol = marketCode.replace('KRW-', '');
+              pendingUpdates.current.set(symbol, ticker);
 
-        if (ticker.type === 'ticker') {
-          const marketCode = ticker.code || ticker.market;
-          if (marketCode) {
-            const symbol = marketCode.replace('KRW-', '');
+              if (!flushTimer.current) {
+                flushTimer.current = setTimeout(() => {
+                  const batch = new Map(pendingUpdates.current);
+                  pendingUpdates.current.clear();
+                  flushTimer.current = null;
 
-            // 버퍼에 적재
-            pendingUpdates.current.set(symbol, ticker);
-
-            // 타이머가 없으면 200ms 뒤 일괄 flush
-            if (!flushTimer.current) {
-              flushTimer.current = setTimeout(() => {
-                const batch = new Map(pendingUpdates.current);
-                pendingUpdates.current.clear();
-                flushTimer.current = null;
-
-                setData(prev => {
-                  const next = new Map(prev);
-                  batch.forEach((v, k) => next.set(k, v));
-                  return next;
-                });
-              }, 200);
+                  setData(prev => {
+                    const next = new Map(prev);
+                    batch.forEach((v, k) => next.set(k, v));
+                    return next;
+                  });
+                }, 200);
+              }
             }
           }
+        } catch {}
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          processMessage(event.data);
+        } else {
+          (event.data as Blob).text().then(processMessage);
         }
       };
 
@@ -121,23 +141,32 @@ export function useUpbitData() {
           flushTimer.current = null;
         }
 
-        // 지수 백오프: 1s → 2s → 4s → 8s → 16s → 30s(max)
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
         reconnectAttempts.current++;
 
         setTimeout(() => {
-          if (marketList.length > 0) {
-            connectWebSocket(marketList);
-          }
+          if (marketList.length > 0) connectWebSocket(marketList);
         }, delay);
       };
     };
 
     const initialize = async () => {
-      const marketList = await fetchMarkets();
-      if (marketList.length > 0) {
-        await fetchInitialTickers(marketList);
-        connectWebSocket(marketList);
+      const cached = getCachedMarkets();
+
+      if (cached && cached.length > 0) {
+        // 캐시 히트: 즉시 티커 fetch + WebSocket 동시 시작
+        setMarkets(cached);
+        fetchInitialTickers(cached);   // await 없이 병렬
+        connectWebSocket(cached);
+        // 백그라운드에서 캐시 갱신
+        fetchMarkets();
+      } else {
+        // 캐시 미스: markets fetch 후 티커 + WebSocket 동시 시작
+        const marketList = await fetchMarkets();
+        if (marketList.length > 0) {
+          fetchInitialTickers(marketList);  // await 없이 병렬
+          connectWebSocket(marketList);
+        }
       }
     };
 
