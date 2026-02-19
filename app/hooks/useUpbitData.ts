@@ -127,8 +127,8 @@ export function useUpbitData() {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('Upbit WebSocket error:', error);
+      ws.onerror = () => {
+        console.warn('Upbit WebSocket 연결 오류 — 재연결 시도 중...');
         setIsConnected(false);
       };
 
