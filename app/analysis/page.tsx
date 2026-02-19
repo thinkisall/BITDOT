@@ -61,6 +61,11 @@ interface MultiTimeframeResult {
     slope: number;
     ma50Current: number;
   };
+  swingRecovery?: {
+    slopeOld: number;
+    slopeRecent: number;
+    ma50Current: number;
+  };
 }
 
 interface AnalysisResponse {
@@ -253,6 +258,11 @@ export default function AnalysisPage() {
   const sectionSwing = filteredResults.filter(r =>
     r.above1hMA50 === true && r.above5mMA50 === true
   );
+
+  // 스윙 리커버리 — 하락 추세(MA50 기울기 음수) → 횡보(기울기 0근처) → 현재가 1h MA50 위
+  const sectionSwingRecovery = filteredResults
+    .filter(r => r.swingRecovery !== undefined)
+    .sort((a, b) => b.volume - a.volume);
 
   // 구름 타점 — 5m · 30m · 1h · 4h 모두 구름 위
   const sectionCloud = filteredResults.filter(r =>
@@ -519,6 +529,51 @@ export default function AnalysisPage() {
                       items={sectionSwing}
                       empty="MA50 우상향 종목 없음"
                     />
+                  </div>
+
+                  {/* Row 2b: 스윙 리커버리 (전체 너비) */}
+                  <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
+                    <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-cyan-500/30 rounded-t-lg">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm shrink-0">🔄</span>
+                        <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">스윙 리커버리</h3>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionSwingRecovery.length}</span>
+                      </div>
+                      <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">하락 추세(MA50 기울기↓) → 횡보(기울기 0근처) 후 현재가 1h MA50 위</p>
+                    </div>
+                    <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+                      {sectionSwingRecovery.length > 0 ? (
+                        sectionSwingRecovery.map(r => (
+                          <div
+                            key={`${r.exchange}-${r.symbol}`}
+                            onClick={() => setSelectedCoin(r)}
+                            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
+                              <span className="text-[9px] font-bold text-cyan-400">{r.symbol.slice(0, 2)}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <span className="text-xs font-bold text-white truncate">{r.symbol}</span>
+                                {isBinanceAlpha(r.symbol) && (
+                                  <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-500">{r.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
+                            </div>
+                            <div className="hidden sm:flex flex-col items-end gap-0.5 shrink-0">
+                              <span className="text-[8px] text-red-400">과거 {r.swingRecovery!.slopeOld > 0 ? '+' : ''}{r.swingRecovery!.slopeOld}%</span>
+                              <span className="text-[8px] text-cyan-400">현재 {r.swingRecovery!.slopeRecent > 0 ? '+' : ''}{r.swingRecovery!.slopeRecent}%</span>
+                            </div>
+                            <div className="text-[10px] text-white font-mono shrink-0 text-right">
+                              ₩{formatNumber(r.currentPrice)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-[10px] text-zinc-500">하락→횡보→MA50 위 전환 종목 없음</div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Row 3: 기준봉 발생 + 눌림목 타점 (2열) */}

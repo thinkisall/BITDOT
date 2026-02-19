@@ -98,6 +98,11 @@ interface MultiTimeframeResult {
     slope: number; // 기울기 퍼센트
     ma50Current: number; // 현재 MA50 값
   };
+  swingRecovery?: { // 하락→횡보→MA50 위 전환 신호
+    slopeOld: number;    // 과거 기울기 (하락, 음수)
+    slopeRecent: number; // 최근 기울기 (횡보, 0 근처)
+    ma50Current: number; // 현재 MA50 값
+  };
 }
 
 // 1시간봉 MA50 기울기 분석 함수 (우상향 추세 판별)
@@ -140,6 +145,45 @@ function detectMA50Uptrend(candles: any[]): { isUptrend: boolean; slope?: number
   };
 }
 
+
+// 하락 추세(MA50 기울기 음수) → 횡보(MA50 기울기 0 근처) → 현재가 MA50 위 패턴 탐지
+// - 과거 구간(30~15봉 전): MA50 기울기가 음수 (하락 추세)
+// - 최근 구간(15~0봉 전): MA50 기울기가 0 근처 (횡보)
+// - 현재: 현재가 > MA50
+function detectDowntrendToFlat(
+  candles: any[],
+  currentPrice: number
+): { isSignal: boolean; slopeOld?: number; slopeRecent?: number; ma50Current?: number } {
+  if (candles.length < 80) return { isSignal: false };
+
+  const calcMA50 = (endIdx: number) => {
+    const slice = candles.slice(endIdx - 50, endIdx);
+    return slice.reduce((s: number, c: any) => s + c.close, 0) / 50;
+  };
+
+  const n = candles.length;
+  const ma50Now    = calcMA50(n);        // 현재 MA50
+  const ma50_15ago = calcMA50(n - 15);   // 15봉 전 MA50
+  const ma50_30ago = calcMA50(n - 30);   // 30봉 전 MA50
+
+  // 기울기 (15봉 구간 퍼센트 변화)
+  const slopeOld    = ((ma50_15ago - ma50_30ago) / ma50_30ago) * 100; // 과거 (30→15봉 전)
+  const slopeRecent = ((ma50Now    - ma50_15ago) / ma50_15ago) * 100; // 최근 (15봉 전→현재)
+
+  const DOWNTREND_THRESHOLD = -0.3; // 하락 추세: 15봉 구간 -0.3% 이상 하락
+  const FLAT_THRESHOLD = 0.2;       // 횡보: ±0.2% 이내
+
+  const wasDowntrend  = slopeOld < DOWNTREND_THRESHOLD;
+  const isFlat        = Math.abs(slopeRecent) < FLAT_THRESHOLD;
+  const aboveMA50     = currentPrice > ma50Now;
+
+  return {
+    isSignal: wasDowntrend && isFlat && aboveMA50,
+    slopeOld:    Math.round(slopeOld    * 100) / 100,
+    slopeRecent: Math.round(slopeRecent * 100) / 100,
+    ma50Current: Math.round(ma50Now),
+  };
+}
 
 // 일목구름 대비 현재가 상태 반환
 // 'above' : 구름 위  (통과)
@@ -453,6 +497,9 @@ async function performAnalysis() {
           // 1시간봉 MA50 우상향 추세 판별
           const ma50Analysis = detectMA50Uptrend(candles1h);
 
+          // 하락→횡보→MA50 위 스윙 리커버리 패턴 탐지
+          const swingRecovery = detectDowntrendToFlat(candles1h, currentPrice);
+
           // 가격 위치 계산 함수
           const calculatePosition = (price: number, top: number, bottom: number) => {
             const boxHeight = top - bottom;
@@ -549,6 +596,11 @@ async function performAnalysis() {
               isUptrend: true,
               slope: ma50Analysis.slope!,
               ma50Current: ma50Analysis.ma50Current!,
+            } : undefined,
+            swingRecovery: swingRecovery.isSignal ? {
+              slopeOld: swingRecovery.slopeOld!,
+              slopeRecent: swingRecovery.slopeRecent!,
+              ma50Current: swingRecovery.ma50Current!,
             } : undefined,
           };
 
