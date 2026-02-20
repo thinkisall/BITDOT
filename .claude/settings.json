@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(command -v:*)",
+      "Bash(/usr/bin/ssh:*)",
+      "Bash(/c/Windows/System32/OpenSSH/ssh.exe -V)",
+      "Bash(dir:*)",
+      "Bash(curl:*)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri ''https://api.maketruthy.com/predict'' -Method POST -ContentType ''application/json'' -Body ''{\"\"symbol\"\":\"\"BTC\"\"}'' | Select-Object -ExpandProperty Content\")",
+      "Bash(powershell -NoProfile -Command \"$r = Invoke-RestMethod -Uri ''https://api.maketruthy.com/predict'' -Method POST -ContentType ''application/json'' -Body ''{\"\"symbol\"\":\"\"BTC\"\"}''; $r | ConvertTo-Json -Depth 10\")",
+      "Bash(powershell -NoProfile -Command \"$body = ConvertTo-Json @{symbol=''BTC''}; $r = Invoke-RestMethod -Uri ''https://api.maketruthy.com/predict'' -Method POST -ContentType ''application/json'' -Body $body; $r | ConvertTo-Json -Depth 10\")",
+      "Bash(powershell -NoProfile:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(python:*)",
+      "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm/top200/result''\\).then\\(r=>r.json\\(\\)\\).then\\(d=>{const r=d.results[0];const preview={...r};if\\(r[''5h_detail'']\\)preview[''5h_detail'']=r[''5h_detail''].slice\\(0,2\\);if\\(r[''30h_detail'']\\)preview[''30h_detail'']=r[''30h_detail''].slice\\(0,2\\);console.log\\(JSON.stringify\\({updated_at:d.updated_at,count:d.count,first:preview},null,2\\)\\)}\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
+      "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm/top200/result''\\).then\\(r=>r.json\\(\\)\\).then\\(d=>{console.log\\(JSON.stringify\\(Object.keys\\(d\\)\\)\\);console.log\\(''count:'',d.count\\);if\\(d.results && d.results[0]\\){const r=d.results[0];const keys=Object.keys\\(r\\);console.log\\(''result keys:'',JSON.stringify\\(keys\\)\\);keys.forEach\\(k=>{const v=r[k];if\\(Array.isArray\\(v\\)\\){console.log\\(k,'':'',JSON.stringify\\(v.slice\\(0,1\\)\\)\\)}else{console.log\\(k,'':'',v\\)}}\\);}else{console.log\\(JSON.stringify\\(d\\).substring\\(0,500\\)\\)}}\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
+      "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm'', {method:''POST'',headers:{''Content-Type'':''application/json''},body:JSON.stringify\\({symbol:''BTC''}\\)}\\).then\\(r=>r.json\\(\\)\\).then\\(d=>{const keys=Object.keys\\(d\\);console.log\\(''keys:'',JSON.stringify\\(keys\\)\\);keys.forEach\\(k=>{const v=d[k];if\\(Array.isArray\\(v\\)\\){console.log\\(k,'': ['',JSON.stringify\\(v[0]\\),'']''\\)}else{console.log\\(k,'':'',v\\)}}\\)}\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
+      "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm/top200/start'',{method:''POST'',headers:{''Content-Type'':''application/json''}}\\).then\\(r=>r.json\\(\\)\\).then\\(d=>console.log\\(JSON.stringify\\(d,null,2\\)\\)\\).catch\\(e=>console.error\\(e.message\\)\\)\")"
+    ]
+  }
+}

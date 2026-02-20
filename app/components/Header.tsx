@@ -58,6 +58,18 @@ export default function Header() {
             게시판
           </Link>
           <Link
+            href="/predict"
+            className={`whitespace-nowrap transition-colors ${pathname === "/predict" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            AI 예측
+          </Link>
+          <Link
+            href="/lstm"
+            className={`whitespace-nowrap transition-colors ${pathname === "/lstm" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            LSTM 예측
+          </Link>
+          <Link
             href="/ai-chat"
             className={`whitespace-nowrap transition-colors ${pathname === "/ai-chat" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -173,6 +185,28 @@ export default function Header() {
                 }`}
               >
                 게시판
+              </Link>
+              <Link
+                href="/predict"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/predict"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                AI 예측
+              </Link>
+              <Link
+                href="/lstm"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/lstm"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                LSTM 예측
               </Link>
               <Link
                 href="/ai-chat"
