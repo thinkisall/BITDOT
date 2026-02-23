@@ -264,9 +264,9 @@ def main():
         results = []
         analyzed_count = 0
 
-        # 빗썸 분석 (시간이 오래 걸리므로 제한)
+        # 빗썸 분석 (300개 제한)
         print("\nAnalyzing Bithumb markets...", file=sys.stderr)
-        for symbol in bithumb_markets[:50]:  # 처음 50개만
+        for symbol in bithumb_markets[:300]:  # 300개
             result = analyze_symbol(symbol, 'bithumb')
             analyzed_count += 1
 
@@ -274,7 +274,7 @@ def main():
                 results.append(result)
                 print(f"  ✓ {symbol}: {result['boxCount']} timeframes", file=sys.stderr)
 
-            if analyzed_count % 10 == 0:
+            if analyzed_count % 50 == 0:
                 print(f"Progress: {analyzed_count} analyzed, {len(results)} found", file=sys.stderr)
 
         # 결과 정렬 (거래량 기준)
