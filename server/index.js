@@ -20,10 +20,12 @@ app.use((req, res, next) => {
 // 라우트 임포트
 const scanRouter = require('./routes/scan');
 const chartRouter = require('./routes/chart');
+const fundingRouter = require('./routes/funding');
 
 // API 라우트 등록
 app.use('/api/scan', scanRouter);
 app.use('/api/chart', chartRouter);
+app.use('/api/funding', fundingRouter);
 
 // 헬스체크
 app.get('/health', (req, res) => {
@@ -42,6 +44,7 @@ app.get('/', (req, res) => {
     endpoints: [
       'POST /api/scan - 박스권 스캔',
       'GET /api/chart?symbol=BTC&exchange=upbit - 차트 데이터',
+      'GET /api/funding - 펀딩비 데이터',
       'GET /health - 서버 상태',
     ],
   });

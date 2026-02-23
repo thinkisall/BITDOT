@@ -11,8 +11,13 @@ const nextConfig: NextConfig = {
             "https://api.maketruthy.com/api/:path*",
         },
       ],
-      // beforeFiles: multi-timeframe은 Next.js API 라우트를 직접 사용하므로 프록시하지 않음
-      beforeFiles: [],
+      // beforeFiles: funding API는 지역 제한 우회를 위해 외부 서버로 프록시
+      beforeFiles: [
+        {
+          source: "/api/funding",
+          destination: "https://api.maketruthy.com/api/funding",
+        },
+      ],
       fallback: [],
     };
   },
