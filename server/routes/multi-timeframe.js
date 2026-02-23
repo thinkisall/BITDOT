@@ -1,6 +1,7 @@
 // server/routes/multi-timeframe.js
-// Next.js API를 프록시하는 간단한 라우트
 const express = require('express');
+const { spawn } = require('child_process');
+const path = require('path');
 const router = express.Router();
 
 // 캐시 (10분 TTL)
@@ -20,12 +21,11 @@ router.post('/', async (req, res) => {
       return res.json(cache);
     }
 
-    // 캐시 만료 또는 없음
+    // 캐시 만료 또는 없음 - 백그라운드에서 분석 시작
     if (!isAnalyzing) {
       console.log('Starting multi-timeframe analysis in background...');
       isAnalyzing = true;
 
-      // 백그라운드에서 분석 실행 (응답 대기하지 않음)
       performAnalysis().catch(err => {
         console.error('Multi-timeframe analysis error:', err);
         isAnalyzing = false;
@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
       return res.json({
         ...cache,
         cached: true,
-        stale: true,
+        stale: cacheAge > CACHE_TTL / 1000,
         cacheAge,
         analyzing: isAnalyzing,
       });
@@ -67,33 +67,67 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 실제 분석 로직 (여기서는 외부 Python 스크립트나 별도 서비스 호출 가능)
+// Python 스크립트 호출 함수
 async function performAnalysis() {
   try {
-    // TODO: 실제 분석 로직 구현
-    // 현재는 더미 데이터 반환
-    console.log('Analysis started...');
+    console.log('[Multi-timeframe] Analysis started...');
 
-    // 3분 정도 걸리는 무거운 작업 시뮬레이션
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const scriptPath = path.join(__dirname, '../scripts/multi_timeframe_analysis.py');
 
-    const result = {
-      results: [],
-      totalAnalyzed: 0,
-      foundCount: 0,
+    // Python 스크립트 실행
+    const result = await runPythonScript(scriptPath);
+
+    cache = {
+      results: result.results || [],
+      totalAnalyzed: result.totalAnalyzed || 0,
+      foundCount: result.foundCount || 0,
       lastUpdated: Date.now(),
     };
-
-    cache = result;
     cacheTimestamp = Date.now();
     isAnalyzing = false;
 
-    console.log('Analysis completed and cached');
+    console.log(`[Multi-timeframe] Analysis completed: ${cache.foundCount} results found`);
   } catch (error) {
-    console.error('Analysis failed:', error);
+    console.error('[Multi-timeframe] Analysis failed:', error);
     isAnalyzing = false;
     throw error;
   }
+}
+
+// Python 스크립트 실행 헬퍼
+function runPythonScript(scriptPath) {
+  return new Promise((resolve, reject) => {
+    const python = spawn('python3', [scriptPath]);
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Python script exited with code ${code}: ${stderr}`));
+        return;
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        resolve(result);
+      } catch (e) {
+        reject(new Error(`Failed to parse Python output: ${e.message}`));
+      }
+    });
+
+    python.on('error', (error) => {
+      reject(new Error(`Failed to start Python script: ${error.message}`));
+    });
+  });
 }
 
 // 서버 시작 시 첫 분석 실행
