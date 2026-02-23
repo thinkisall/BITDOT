@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, ComposedChart } from 'recharts';
 
 /* ── 타입 ──────────────────────────────────────── */
 interface DetailRow {
@@ -93,6 +94,117 @@ function ShortCards({ rows }: { rows: DetailRow[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ── 차트 컴포넌트 ──────────────────────────────── */
+function PredictionChart({ rows, currentPrice, title, color }: {
+  rows: DetailRow[];
+  currentPrice: number;
+  title: string;
+  color: string;
+}) {
+  // 현재가를 첫 데이터로 추가
+  const chartData = [
+    {
+      ds: '현재',
+      date: '현재',
+      pred: currentPrice,
+      upper: currentPrice,
+      lower: currentPrice,
+    },
+    ...rows.map(row => ({
+      ds: row.ds,
+      date: fmtDate(row.ds),
+      pred: row.hybrid_pred,
+      upper: row.hybrid_upper,
+      lower: row.hybrid_lower,
+    }))
+  ];
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const data = payload[0].payload;
+    return (
+      <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-3 shadow-xl">
+        <p className="text-xs text-zinc-400 mb-2">{data.date}</p>
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-white">예측: {fmtPrice(data.pred)}</p>
+          <p className="text-xs text-green-400">상단: {fmtPrice(data.upper)}</p>
+          <p className="text-xs text-red-400">하단: {fmtPrice(data.lower)}</p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full h-[300px] sm:h-[400px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+          <XAxis
+            dataKey="date"
+            stroke="#71717a"
+            tick={{ fill: '#71717a', fontSize: 11 }}
+            angle={-45}
+            textAnchor="end"
+            height={60}
+          />
+          <YAxis
+            stroke="#71717a"
+            tick={{ fill: '#71717a', fontSize: 11 }}
+            tickFormatter={(value) => fmtPrice(value)}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend
+            wrapperStyle={{ fontSize: '12px' }}
+            iconType="line"
+          />
+          <Area
+            type="monotone"
+            dataKey="upper"
+            stroke="none"
+            fill={color === 'blue' ? '#3b82f6' : '#a855f7'}
+            fillOpacity={0.1}
+            name="신뢰구간"
+          />
+          <Area
+            type="monotone"
+            dataKey="lower"
+            stroke="none"
+            fill={color === 'blue' ? '#3b82f6' : '#a855f7'}
+            fillOpacity={0.1}
+          />
+          <Line
+            type="monotone"
+            dataKey="pred"
+            stroke={color === 'blue' ? '#60a5fa' : '#c084fc'}
+            strokeWidth={3}
+            dot={{ fill: color === 'blue' ? '#60a5fa' : '#c084fc', r: 4 }}
+            activeDot={{ r: 6 }}
+            name="예측가"
+          />
+          <Line
+            type="monotone"
+            dataKey="upper"
+            stroke="#22c55e"
+            strokeWidth={1.5}
+            strokeDasharray="5 5"
+            dot={false}
+            name="상단"
+          />
+          <Line
+            type="monotone"
+            dataKey="lower"
+            stroke="#ef4444"
+            strokeWidth={1.5}
+            strokeDasharray="5 5"
+            dot={false}
+            name="하단"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -344,14 +456,50 @@ export default function PredictPage() {
                     </div>
                   </div>
 
+                  {/* 5일 차트 */}
+                  {short.length > 0 && (
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-zinc-800 bg-linear-to-r from-blue-500/10 to-transparent">
+                        <h2 className="text-sm font-bold text-white">단기 예측 차트 <span className="text-blue-400">5일</span></h2>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">예측 가격 추이 및 신뢰구간</p>
+                      </div>
+                      <div className="p-4">
+                        <PredictionChart
+                          rows={short}
+                          currentPrice={currentData.latest_price}
+                          title="5일 예측"
+                          color="blue"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* 5일 상세 카드 */}
                   {short.length > 0 && (
                     <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
                       <div className="px-4 py-3 border-b border-zinc-800 bg-linear-to-r from-blue-500/10 to-transparent">
-                        <h2 className="text-sm font-bold text-white">단기 예측 <span className="text-blue-400">5일</span></h2>
+                        <h2 className="text-sm font-bold text-white">단기 예측 상세 <span className="text-blue-400">5일</span></h2>
                         <p className="text-[10px] text-zinc-500 mt-0.5">예측가 · 상단(신뢰구간 상한) · 하단(신뢰구간 하한)</p>
                       </div>
                       <ShortCards rows={short} />
+                    </div>
+                  )}
+
+                  {/* 30일 차트 */}
+                  {long.length > 0 && (
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-zinc-800 bg-linear-to-r from-purple-500/10 to-transparent">
+                        <h2 className="text-sm font-bold text-white">장기 예측 차트 <span className="text-purple-400">30일</span></h2>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">30일간 예측 가격 추이 및 신뢰구간</p>
+                      </div>
+                      <div className="p-4">
+                        <PredictionChart
+                          rows={long}
+                          currentPrice={currentData.latest_price}
+                          title="30일 예측"
+                          color="purple"
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -359,7 +507,7 @@ export default function PredictPage() {
                   {long.length > 0 && (
                     <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
                       <div className="px-4 py-3 border-b border-zinc-800 bg-linear-to-r from-purple-500/10 to-transparent">
-                        <h2 className="text-sm font-bold text-white">장기 예측 <span className="text-purple-400">30일</span></h2>
+                        <h2 className="text-sm font-bold text-white">장기 예측 상세 <span className="text-purple-400">30일</span></h2>
                         <p className="text-[10px] text-zinc-500 mt-0.5">일별 예측가 및 신뢰구간 · 마지막 행 = 최종 예측</p>
                       </div>
                       <div className="overflow-y-auto" style={{ maxHeight: '520px' }}>
