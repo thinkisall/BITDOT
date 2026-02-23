@@ -1,9 +1,6 @@
 // instrumentation.ts
-// Next.js 서버 시작 시 한 번 실행됨 — 백그라운드 분석 워커 자동 시작
+// Multi-timeframe 분석은 외부 Express 서버(api.maketruthy.com)에서 처리됨
+// 백그라운드 워커 불필요
 export async function register() {
-  // Node.js 런타임에서만 실행 (Edge Runtime 제외)
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { startBackgroundWorker } = await import('./app/api/multi-timeframe/route');
-    startBackgroundWorker();
-  }
+  // 비활성화됨 - 외부 서버에서 처리
 }
