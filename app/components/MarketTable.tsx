@@ -64,6 +64,15 @@ const CoinRow = memo(function CoinRow({
   const singleExch = exchangeFilter !== 'all' ? exchangeFilter : null;
   const singleData = singleExch === 'upbit' ? coin.upbit : singleExch === 'bithumb' ? coin.bithumb : null;
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(coin.symbol);
+      // 복사 성공 피드백은 선택사항 (필요시 toast 추가 가능)
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   const CoinInfo = () => (
     <div className="flex items-center gap-3">
       <div className="w-8 h-8 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
@@ -71,24 +80,38 @@ const CoinRow = memo(function CoinRow({
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-white">{coin.name}</div>
+          <div
+            className="text-sm font-medium text-white cursor-pointer hover:text-yellow-500 transition-colors"
+            onClick={handleCopy}
+            title="클릭하여 복사"
+          >
+            {coin.name}
+          </div>
           {isBinanceAlpha(coin.symbol) && (
             <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded">ALPHA</span>
           )}
         </div>
-        <div className="text-xs text-zinc-500">{coin.symbol}</div>
+        <div
+          className="text-xs text-zinc-500 cursor-pointer hover:text-yellow-500 transition-colors"
+          onClick={handleCopy}
+          title="클릭하여 복사"
+        >
+          {coin.symbol}
+        </div>
       </div>
     </div>
   );
 
   const MobileCoinInfo = () => (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5" onClick={handleCopy}>
       <div className="w-5 h-5 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
         <span className="text-[8px] font-bold text-yellow-500">{coin.symbol.slice(0, 2)}</span>
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-1">
-          <div className="text-[10px] font-medium text-white truncate">{coin.name}</div>
+          <div className="text-[10px] font-medium text-white truncate cursor-pointer hover:text-yellow-500 transition-colors">
+            {coin.name}
+          </div>
           {isBinanceAlpha(coin.symbol) && (
             <span className="px-1 py-0.5 text-[7px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 rounded whitespace-nowrap">α</span>
           )}
