@@ -3,6 +3,12 @@ import { fetchUpbitCandles5M, fetchUpbitCandles30M, fetchUpbitCandles, fetchUpbi
 import { fetchBithumbCandles5M, fetchBithumbCandles30M, fetchBithumbCandles, fetchBithumbCandles4H, fetchBithumbCandles1D } from "@/lib/bithumbCandles";
 import { findSupportResistanceLevels, detectBoxRanges } from "@/lib/supportResistance";
 import { fetchBithumbMarkets } from "@/lib/markets";
+import { promises as fs } from 'fs';
+import path from 'path';
+
+// Vercel Serverless 환경에서 /tmp 캐시 사용
+const CACHE_DIR = '/tmp';
+const CACHE_FILE = path.join(CACHE_DIR, 'multi-timeframe-cache.json');
 
 // ─── Queue Rate Limiter ───────────────────────────────────────────────────────
 // 동시 호출 시 각 consumer에게 고유한 time slot 부여 → 진짜 순차 제한
@@ -49,6 +55,39 @@ let cachedResults: {
 let isAnalyzing = false; // 분석 진행 중 플래그
 let backgroundWorkerStarted = false; // 백그라운드 워커 시작 플래그
 const ANALYSIS_INTERVAL = 5 * 60 * 1000; // 5분마다 분석
+const CACHE_TTL = 10 * 60 * 1000; // 10분 캐시 유효 기간
+
+// 파일 시스템 캐시 읽기
+async function loadCacheFromFile() {
+  try {
+    const data = await fs.readFile(CACHE_FILE, 'utf-8');
+    const parsed = JSON.parse(data);
+    const age = Date.now() - parsed.lastUpdated;
+
+    // 캐시가 10분 이내면 사용
+    if (age < CACHE_TTL) {
+      console.log(`Loaded cache from file (age: ${Math.floor(age / 1000)}s)`);
+      cachedResults = parsed;
+      return parsed;
+    } else {
+      console.log(`Cache expired (age: ${Math.floor(age / 1000)}s)`);
+      return null;
+    }
+  } catch (error) {
+    console.log('No cache file found or invalid');
+    return null;
+  }
+}
+
+// 파일 시스템 캐시 저장
+async function saveCacheToFile(data: any) {
+  try {
+    await fs.writeFile(CACHE_FILE, JSON.stringify(data), 'utf-8');
+    console.log('Cache saved to file');
+  } catch (error) {
+    console.error('Failed to save cache to file:', error);
+  }
+}
 
 interface TimeframeBoxInfo {
   hasBox: boolean;
@@ -672,6 +711,9 @@ async function performAnalysis() {
       foundCount: validResults.length,
       lastUpdated: Date.now(),
     };
+
+    // 파일로도 저장 (Vercel Serverless 재시작 대응)
+    await saveCacheToFile(cachedResults);
 
     console.log(`Analysis complete. Cached ${validResults.length} results.`);
     isAnalyzing = false;
