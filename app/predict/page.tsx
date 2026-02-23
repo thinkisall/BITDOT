@@ -20,8 +20,8 @@ interface SymbolResult {
   pred_30d: number;
   change_5d_pct: number;
   change_30d_pct: number;
-  '5d_detail': DetailRow[];
-  '30d_detail': DetailRow[];
+  '5d': DetailRow[];
+  '30d': DetailRow[];
 }
 
 interface Top100Response {
@@ -290,8 +290,8 @@ export default function PredictPage() {
 
   const currentData = allData?.results.find(r => r.symbol === selected) ?? null;
 
-  const short = currentData?.['5d_detail'] ?? [];
-  const long  = currentData?.['30d_detail'] ?? [];
+  const short = currentData?.['5d'] ?? [];
+  const long  = currentData?.['30d'] ?? [];
 
   return (
     <div className="min-h-screen bg-zinc-950">
