@@ -175,6 +175,131 @@ def calculate_ma50(candles: List[Dict]) -> Optional[float]:
     closes = [c['close'] for c in recent_50]
     return sum(closes) / 50
 
+def calculate_ma110(candles: List[Dict]) -> Optional[float]:
+    """MA110 계산"""
+    if len(candles) < 110:
+        return None
+    recent_110 = candles[-110:]
+    closes = [c['close'] for c in recent_110]
+    return sum(closes) / 110
+
+def calculate_ma180(candles: List[Dict]) -> Optional[float]:
+    """MA180 계산"""
+    if len(candles) < 180:
+        return None
+    recent_180 = candles[-180:]
+    closes = [c['close'] for c in recent_180]
+    return sum(closes) / 180
+
+def calculate_ichimoku_cloud(candles: List[Dict]) -> Optional[Dict]:
+    """일목구름 계산 (선행스팬A, 선행스팬B)"""
+    if len(candles) < 52:
+        return None
+
+    # 전환선 (9일 최고최저 평균)
+    conversion_period = candles[-9:]
+    conversion = (max(c['high'] for c in conversion_period) + min(c['low'] for c in conversion_period)) / 2
+
+    # 기준선 (26일 최고최저 평균)
+    base_period = candles[-26:]
+    base = (max(c['high'] for c in base_period) + min(c['low'] for c in base_period)) / 2
+
+    # 선행스팬A (전환선 + 기준선) / 2, 26일 선행
+    span_a = (conversion + base) / 2
+
+    # 선행스팬B (52일 최고최저 평균), 26일 선행
+    span_b_period = candles[-52:]
+    span_b = (max(c['high'] for c in span_b_period) + min(c['low'] for c in span_b_period)) / 2
+
+    return {
+        'spanA': span_a,
+        'spanB': span_b,
+        'cloudTop': max(span_a, span_b),
+        'cloudBottom': min(span_a, span_b)
+    }
+
+def check_cloud_status(current_price: float, cloud: Optional[Dict]) -> Optional[str]:
+    """구름 위치 확인"""
+    if not cloud:
+        return None
+
+    if current_price > cloud['cloudTop']:
+        return 'above'
+    elif current_price >= cloud['cloudBottom'] * 0.98:  # 2% 이내
+        return 'near'
+    return None
+
+def detect_trigger_candle(candles: List[Dict]) -> bool:
+    """기준봉 발생 여부 (최근 7일 내 장대양봉: 몸통 7%+, 거래량 10배+)"""
+    if len(candles) < 20:
+        return False
+
+    recent_7 = candles[-7:]
+    avg_volume = sum(c['volume'] for c in candles[-20:-7]) / 13
+
+    for candle in recent_7:
+        body_pct = abs(candle['close'] - candle['open']) / candle['open'] * 100
+        volume_ratio = candle['volume'] / avg_volume if avg_volume > 0 else 0
+
+        if body_pct >= 7 and volume_ratio >= 10 and candle['close'] > candle['open']:
+            return True
+
+    return False
+
+def check_pullback_signal(current_price: float, ma110: Optional[float], ma50: Optional[float], ma180: Optional[float]) -> Optional[str]:
+    """눌림목 타점 확인 (110/180일선 ±2% 이내)"""
+    if ma110 and abs(current_price - ma110) / ma110 <= 0.02:
+        return 'TREND_110'
+    if ma50 and abs(current_price - ma50) / ma50 <= 0.02:
+        return 'SUPPORT_50'
+    if ma180 and abs(current_price - ma180) / ma180 <= 0.02:
+        return 'SUPPORT_180'
+    return None
+
+def calculate_ma_slope(candles: List[Dict], period: int, lookback: int = 5) -> Optional[float]:
+    """MA 기울기 계산 (최근 lookback개 MA 값의 평균 변화율)"""
+    if len(candles) < period + lookback:
+        return None
+
+    slopes = []
+    for i in range(lookback):
+        idx = -(i + 1)
+        ma_current = calculate_ma_from_slice(candles[:idx], period) if idx < -1 else calculate_ma_from_slice(candles, period)
+        ma_prev = calculate_ma_from_slice(candles[:idx - 1], period)
+
+        if ma_current and ma_prev and ma_prev > 0:
+            slope = (ma_current - ma_prev) / ma_prev * 100
+            slopes.append(slope)
+
+    return sum(slopes) / len(slopes) if slopes else None
+
+def calculate_ma_from_slice(candles: List[Dict], period: int) -> Optional[float]:
+    """슬라이스에서 MA 계산"""
+    if len(candles) < period:
+        return None
+    recent = candles[-period:]
+    closes = [c['close'] for c in recent]
+    return sum(closes) / period
+
+def check_swing_recovery(candles: List[Dict], current_price: float, ma50_1h: Optional[float]) -> Optional[Dict]:
+    """스윙 리커버리 확인 (하락 → 횡보 → MA50 위)"""
+    if not ma50_1h or current_price <= ma50_1h:
+        return None
+
+    slope_old = calculate_ma_slope(candles, 50, lookback=10)  # 10봉 전 기울기
+    slope_recent = calculate_ma_slope(candles, 50, lookback=5)  # 최근 5봉 기울기
+
+    if slope_old and slope_recent:
+        # 과거 하락 추세 → 현재 횡보/상승
+        if slope_old < -0.5 and slope_recent > -0.3:
+            return {
+                'slopeOld': round(slope_old, 2),
+                'slopeRecent': round(slope_recent, 2),
+                'ma50Current': ma50_1h
+            }
+
+    return None
+
 def analyze_symbol(symbol: str, exchange: str) -> Optional[Dict]:
     """단일 심볼 분석"""
     try:
@@ -228,6 +353,28 @@ def analyze_symbol(symbol: str, exchange: str) -> Optional[Dict]:
         ma50_5m = calculate_ma50(candles_data.get('5m', []))
         above_5m_ma50 = current_price > ma50_5m if ma50_5m else False
 
+        # 일목구름 체크
+        cloud_5m = calculate_ichimoku_cloud(candles_data.get('5m', []))
+        cloud_30m = calculate_ichimoku_cloud(candles_data.get('30m', []))
+        cloud_1h = calculate_ichimoku_cloud(candles_1h)
+        cloud_4h = calculate_ichimoku_cloud(candles_data.get('4h', []))
+
+        cloud_status_5m = check_cloud_status(current_price, cloud_5m)
+        cloud_status_30m = check_cloud_status(current_price, cloud_30m)
+        cloud_status_1h = check_cloud_status(current_price, cloud_1h)
+        cloud_status_4h = check_cloud_status(current_price, cloud_4h)
+
+        # 기준봉 & 눌림목
+        candles_1d = candles_data.get('1d', [])
+        is_triggered = detect_trigger_candle(candles_1d) if candles_1d else False
+
+        ma110 = calculate_ma110(candles_1d) if candles_1d else None
+        ma180 = calculate_ma180(candles_1d) if candles_1d else None
+        pullback_signal = check_pullback_signal(current_price, ma110, ma50_1h, ma180) if is_triggered else None
+
+        # 스윙 리커버리
+        swing_recovery = check_swing_recovery(candles_1h, current_price, ma50_1h)
+
         result = {
             'symbol': symbol,
             'exchange': exchange,
@@ -239,6 +386,22 @@ def analyze_symbol(symbol: str, exchange: str) -> Optional[Dict]:
             'above1hMA50': above_1h_ma50,
             'above5mMA50': above_5m_ma50,
         }
+
+        # 조건부 필드 추가
+        if cloud_status_5m:
+            result['cloudStatus5m'] = cloud_status_5m
+        if cloud_status_30m:
+            result['cloudStatus30m'] = cloud_status_30m
+        if cloud_status_1h:
+            result['cloudStatus'] = cloud_status_1h
+        if cloud_status_4h:
+            result['cloudStatus4h'] = cloud_status_4h
+        if is_triggered:
+            result['isTriggered'] = True
+        if pullback_signal:
+            result['pullbackSignal'] = pullback_signal
+        if swing_recovery:
+            result['swingRecovery'] = swing_recovery
 
         return result
 
