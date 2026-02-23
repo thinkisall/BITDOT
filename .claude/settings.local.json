@@ -8,7 +8,14 @@
       "Bash(pm2:*)",
       "Bash(ls:*)",
       "Bash(echo:*)",
-      "Bash(node_modules/.bin/next build:*)"
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "Bash(git remote set-url:*)"
     ]
   }
 }
