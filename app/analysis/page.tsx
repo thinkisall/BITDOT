@@ -244,15 +244,19 @@ export default function AnalysisPage() {
   ) || [];
 
   // ─ 섹션 필터 ─────────────────────────────────────────────────────────────
-  const byBreakout = (tf: '5m' | '30m' | '1h' | '4h') =>
+  // 박스권 상단 타점 (top 또는 breakout 위치)
+  const byTopOrBreakout = (tf: '5m' | '30m' | '1h' | '4h') =>
     filteredResults
-      .filter(r => r.timeframes[tf].hasBox && r.timeframes[tf].position === 'breakout')
+      .filter(r => {
+        const pos = r.timeframes[tf].position;
+        return r.timeframes[tf].hasBox && (pos === 'top' || pos === 'breakout');
+      })
       .sort((a, b) => b.volume - a.volume);
 
-  const section5m  = byBreakout('5m');
-  const section30m = byBreakout('30m');
-  const section1h  = byBreakout('1h');
-  const section4h  = byBreakout('4h');
+  const section5m  = byTopOrBreakout('5m');
+  const section30m = byTopOrBreakout('30m');
+  const section1h  = byTopOrBreakout('1h');
+  const section4h  = byTopOrBreakout('4h');
 
   // 스윙 타점 — 1h MA50 위 + 5m MA50 위
   const sectionSwing = filteredResults.filter(r =>
@@ -479,7 +483,7 @@ export default function AnalysisPage() {
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <SectionCard
                       title="5분봉 타점"
-                      desc="5m 박스권 상단 돌파"
+                      desc="5m 박스권 상단 근처"
                       icon="⚡"
                       accent="border-b-orange-500/30"
                       items={section5m}
@@ -487,7 +491,7 @@ export default function AnalysisPage() {
                     />
                     <SectionCard
                       title="30분봉 타점"
-                      desc="30m 박스권 상단 돌파"
+                      desc="30m 박스권 상단 근처"
                       icon="🔥"
                       accent="border-b-orange-400/30"
                       items={section30m}
@@ -495,7 +499,7 @@ export default function AnalysisPage() {
                     />
                     <SectionCard
                       title="1시간봉 타점"
-                      desc="1h 박스권 상단 돌파"
+                      desc="1h 박스권 상단 근처"
                       icon="🚀"
                       accent="border-b-yellow-500/30"
                       items={section1h}
@@ -503,7 +507,7 @@ export default function AnalysisPage() {
                     />
                     <SectionCard
                       title="4시간봉 타점"
-                      desc="4h 박스권 상단 돌파"
+                      desc="4h 박스권 상단 근처"
                       icon="💎"
                       accent="border-b-green-500/30"
                       items={section4h}
