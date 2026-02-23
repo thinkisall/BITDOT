@@ -16,7 +16,12 @@
       "Bash(chmod:*)",
       "Bash(python3:*)",
       "Bash(git remote set-url:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill -9)",
+      "Bash(kill:*)",
+      "Bash(/home/thinkisall/trading_env/bin/uvicorn:*)"
     ]
   }
 }
