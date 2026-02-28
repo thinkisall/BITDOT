@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import Header from '../components/Header';
 import type { DivergenceItem, DivergenceResponse } from '../api/divergence/route';
+
+const ChartModal = dynamic(() => import('./ChartModal'), { ssr: false });
 
 function formatPrice(price: number): string {
   if (price >= 1000) return price.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
@@ -35,6 +38,7 @@ export default function DivergencePage() {
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<DivergenceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<DivergenceItem | null>(null);
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -218,7 +222,8 @@ export default function DivergencePage() {
                     {result.items.map((item) => (
                       <tr
                         key={item.market}
-                        className="border-b border-zinc-800/60 hover:bg-zinc-800/40 transition-colors"
+                        onClick={() => setSelectedItem(item)}
+                        className="border-b border-zinc-800/60 hover:bg-zinc-800/40 transition-colors cursor-pointer"
                       >
                         {/* 종목 */}
                         <td className="p-2 sm:p-4">
@@ -282,6 +287,11 @@ export default function DivergencePage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* 차트 모달 */}
+        {selectedItem && (
+          <ChartModal item={selectedItem} onClose={() => setSelectedItem(null)} />
         )}
 
         {/* 주의사항 */}
