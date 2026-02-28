@@ -17,7 +17,7 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
-    // ── Express API 서버 (포트 3001) ─────────────────────────────────────
+    // ── Express API 서버 (포트 8000, Cloudflare Tunnel 설정과 일치) ────────
     {
       name: 'bitdot-api',
       script: 'server/index.js',
@@ -28,12 +28,12 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
-        PORT: 3001,
+        PORT: 8000,
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
-    // ── Cloudflare Tunnel (api.maketruthy.com → localhost:3001) ──────────
+    // ── Cloudflare Tunnel (api.maketruthy.com → localhost:8000) ──────────
     {
       name: 'bitdot-tunnel',
       script: 'cloudflared',
