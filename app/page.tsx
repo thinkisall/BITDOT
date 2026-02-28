@@ -69,25 +69,25 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 하락 다이버전스 스캐너 배너 */}
-        <div className="mb-4 sm:mb-6 rounded-xl border border-red-500/20 bg-linear-to-r from-red-950/20 to-zinc-900 p-4 sm:p-5">
+        {/* MA50 위 종목 스캐너 배너 */}
+        <div className="mb-4 sm:mb-6 rounded-xl border border-green-500/20 bg-linear-to-r from-green-950/20 to-zinc-900 p-4 sm:p-5">
           <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-col sm:flex-row">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-red-500/15 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm sm:text-base font-bold text-white mb-1">
-                <span className="text-red-400">하락 다이버전스</span> 동시 발생 종목 탐지
+                <span className="text-green-400">MA50 위</span> 종목 스캐너
               </div>
               <p className="text-[10px] sm:text-xs text-zinc-400 leading-relaxed">
-                업비트 전종목에서 <strong className="text-zinc-300">1시간봉 + 5분봉 동시 하락 다이버전스</strong> 발생 종목을 자동으로 탐지합니다.
-                가격 고점 ↑, RSI 고점 ↓ 패턴을 동시에 포착합니다.
+                업비트 전종목에서 <strong className="text-zinc-300">5분봉 MA50 + 1시간봉 MA50</strong> 동시에 위에 있는 종목을 탐지합니다.
+                단기·중기 모두 상승 추세인 종목을 포착합니다.
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
-                {['RSI 다이버전스', '1시간봉 + 5분봉 동시', '업비트 전종목'].map((text) => (
-                  <span key={text} className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+                {['5분봉 MA50 위', '1시간봉 MA50 위', '업비트 전종목'].map((text) => (
+                  <span key={text} className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
                     {text}
                   </span>
                 ))}
@@ -95,7 +95,7 @@ export default function Home() {
             </div>
             <Link
               href="/divergence"
-              className="shrink-0 px-4 py-2 bg-red-500 hover:bg-red-400 text-white font-bold rounded-lg transition-colors text-xs sm:text-sm whitespace-nowrap"
+              className="shrink-0 px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors text-xs sm:text-sm whitespace-nowrap"
             >
               스캔하기
             </Link>
