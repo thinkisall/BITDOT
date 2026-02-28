@@ -76,12 +76,6 @@ export default function Header() {
             LSTM 예측
           </Link>
           <Link
-            href="/ai-chat"
-            className={`whitespace-nowrap transition-colors ${pathname === "/ai-chat" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            AI 채팅
-          </Link>
-          <Link
             href="/premium"
             className={`whitespace-nowrap transition-colors ${pathname === "/premium" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -224,17 +218,6 @@ export default function Header() {
                 }`}
               >
                 LSTM 예측
-              </Link>
-              <Link
-                href="/ai-chat"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/ai-chat"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                AI 채팅
               </Link>
               <Link
                 href="/premium"

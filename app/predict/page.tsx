@@ -259,6 +259,8 @@ function LongTable({ rows }: { rows: DetailRow[] }) {
 export default function PredictPage() {
   const [allData, setAllData]       = useState<Top100Response | null>(null);
   const [loading, setLoading]       = useState(false);
+  const [starting, setStarting]     = useState(false);
+  const [noData, setNoData]         = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [selected, setSelected]     = useState<string | null>(null);
   const [search, setSearch]         = useState('');
@@ -266,8 +268,13 @@ export default function PredictPage() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setNoData(false);
     try {
       const res = await fetch('/api/predict');
+      if (res.status === 503) {
+        setNoData(true);
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: Top100Response = await res.json();
       setAllData(json);
@@ -281,6 +288,39 @@ export default function PredictPage() {
       setLoading(false);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startPrediction = useCallback(async () => {
+    setStarting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/predict', { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // 예측 완료까지 폴링 (최대 3분)
+      setNoData(false);
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const r = await fetch('/api/predict');
+        if (r.ok) {
+          const json: Top100Response = await r.json();
+          if (json.results && json.results.length > 0) {
+            clearInterval(poll);
+            setAllData(json);
+            setSelected(json.results[0].symbol);
+            setStarting(false);
+          }
+        }
+        if (attempts > 36) { // 3분 초과
+          clearInterval(poll);
+          setStarting(false);
+          setError('예측 시간이 초과되었습니다. 새로고침을 눌러주세요.');
+        }
+      }, 5000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '예측 시작 실패');
+      setStarting(false);
+    }
+  }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -330,6 +370,55 @@ export default function PredictPage() {
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4">
             <p className="text-sm text-red-400 font-semibold mb-1">불러오기 실패</p>
             <p className="text-xs text-zinc-400">{error}</p>
+          </div>
+        )}
+
+        {/* 예측 실행 중 배너 */}
+        {starting && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <div className="w-5 h-5 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin flex-shrink-0" />
+            <div>
+              <p className="text-sm text-yellow-400 font-semibold">예측 실행 중...</p>
+              <p className="text-xs text-zinc-400">업비트 Top 100 종목 분석 중입니다. 완료되면 자동으로 표시됩니다. (약 1~2분)</p>
+            </div>
+          </div>
+        )}
+
+        {/* 데이터 없음 (503) → 예측 시작 유도 */}
+        {noData && !loading && !starting && (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-8 text-center max-w-sm w-full">
+              <div className="text-4xl mb-4">🤖</div>
+              <h2 className="text-base font-bold text-white mb-2">예측 데이터가 없습니다</h2>
+              <p className="text-xs text-zinc-400 mb-6">
+                아직 예측을 실행하지 않았습니다.<br />
+                업비트 Top 100 종목의 5일·30일 가격 예측을 시작합니다.<br />
+                <span className="text-zinc-500">(약 1~2분 소요)</span>
+              </p>
+              <button
+                onClick={startPrediction}
+                disabled={starting}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold rounded-xl text-sm transition-colors"
+              >
+                {starting ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-black border-t-transparent animate-spin" />
+                    예측 실행 중...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    예측 시작
+                  </>
+                )}
+              </button>
+              {starting && (
+                <p className="text-[10px] text-zinc-500 mt-3">완료되면 자동으로 결과를 표시합니다</p>
+              )}
+            </div>
           </div>
         )}
 
