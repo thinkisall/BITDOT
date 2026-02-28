@@ -1,0 +1,19 @@
+# cloudflared.yml
+# Cloudflare Tunnel 설정 - api.maketruthy.com → localhost:3001
+#
+# 사용법:
+#   cloudflared tunnel --config cloudflared.yml run
+#
+# 또는 토큰 방식 (권장):
+#   cloudflared tunnel --no-autoupdate run --token <YOUR_TOKEN>
+
+tunnel: bitdamoabom-api
+credentials-file: C:\Users\think\.cloudflared\<TUNNEL_ID>.json
+
+ingress:
+  # api.maketruthy.com → 로컬 API 서버 (포트 3001)
+  - hostname: api.maketruthy.com
+    service: http://localhost:3001
+
+  # 나머지는 404
+  - service: http_status:404

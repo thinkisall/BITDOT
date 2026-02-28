@@ -46,6 +46,12 @@ export default function Header() {
             분석
           </Link>
           <Link
+            href="/divergence"
+            className={`whitespace-nowrap transition-colors ${pathname === "/divergence" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            다이버전스
+          </Link>
+          <Link
             href="/funding"
             className={`whitespace-nowrap transition-colors ${pathname === "/funding" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -163,6 +169,17 @@ export default function Header() {
                 }`}
               >
                 분석
+              </Link>
+              <Link
+                href="/divergence"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/divergence"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                다이버전스
               </Link>
               <Link
                 href="/funding"

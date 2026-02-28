@@ -17,7 +17,11 @@
       "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm'', {method:''POST'',headers:{''Content-Type'':''application/json''},body:JSON.stringify\\({symbol:''BTC''}\\)}\\).then\\(r=>r.json\\(\\)\\).then\\(d=>{const keys=Object.keys\\(d\\);console.log\\(''keys:'',JSON.stringify\\(keys\\)\\);keys.forEach\\(k=>{const v=d[k];if\\(Array.isArray\\(v\\)\\){console.log\\(k,'': ['',JSON.stringify\\(v[0]\\),'']''\\)}else{console.log\\(k,'':'',v\\)}}\\)}\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
       "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm/top200/start'',{method:''POST'',headers:{''Content-Type'':''application/json''}}\\).then\\(r=>r.json\\(\\)\\).then\\(d=>console.log\\(JSON.stringify\\(d,null,2\\)\\)\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
       "Bash(git remote get-url:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Read(//d/workspace/**)"
+    ],
+    "additionalDirectories": [
+      "d:\\workspace\\BITDOT\\app\\api"
     ]
   }
 }

@@ -18,16 +18,20 @@ app.use((req, res, next) => {
 });
 
 // 라우트 임포트
-const scanRouter = require('./routes/scan');
-const chartRouter = require('./routes/chart');
-const fundingRouter = require('./routes/funding');
+const scanRouter           = require('./routes/scan');
+const chartRouter          = require('./routes/chart');
+const fundingRouter        = require('./routes/funding');
 const multiTimeframeRouter = require('./routes/multi-timeframe');
+const predictRouter        = require('./routes/predict');
+const lstmRouter           = require('./routes/lstm');
 
 // API 라우트 등록
-app.use('/api/scan', scanRouter);
-app.use('/api/chart', chartRouter);
-app.use('/api/funding', fundingRouter);
+app.use('/api/scan',            scanRouter);
+app.use('/api/chart',           chartRouter);
+app.use('/api/funding',         fundingRouter);
 app.use('/api/multi-timeframe', multiTimeframeRouter);
+app.use('/predict',             predictRouter);   // /predict/top100/result, /predict/top100/start
+app.use('/predict/lstm',        lstmRouter);      // /predict/lstm/top200/result, /predict/lstm/top200/start
 
 // 헬스체크
 app.get('/health', (req, res) => {
@@ -44,11 +48,15 @@ app.get('/', (req, res) => {
     name: 'BITDAMOABOM Backend API',
     version: '1.0.0',
     endpoints: [
-      'POST /api/scan - 박스권 스캔',
-      'GET /api/chart?symbol=BTC&exchange=upbit - 차트 데이터',
-      'GET /api/funding - 펀딩비 데이터',
-      'POST /api/multi-timeframe - 멀티 타임프레임 분석',
-      'GET /health - 서버 상태',
+      'POST /api/scan                    - 박스권 스캔',
+      'GET  /api/chart                   - 차트 데이터',
+      'GET  /api/funding                 - 펀딩비 데이터',
+      'POST /api/multi-timeframe         - 멀티 타임프레임 분석',
+      'GET  /predict/top100/result       - AI 예측 결과 조회',
+      'POST /predict/top100/start        - AI 예측 시작',
+      'GET  /predict/lstm/top200/result  - LSTM 예측 결과 조회',
+      'POST /predict/lstm/top200/start   - LSTM 예측 시작',
+      'GET  /health                      - 서버 상태',
     ],
   });
 });
