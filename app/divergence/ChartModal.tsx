@@ -52,7 +52,7 @@ export default function ChartModal({ item, onClose }: Props) {
 
         // 데이터 fetch
         const res = await fetch(
-          `/api/chart?symbol=${item.symbol}&exchange=upbit&timeframe=${timeframe}`
+          `/api/chart?symbol=${item.symbol}&exchange=${item.exchange}&timeframe=${timeframe}`
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();

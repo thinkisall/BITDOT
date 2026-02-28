@@ -3,6 +3,7 @@
 // 조건: 5분봉 MA50 위 AND 1시간봉 MA50 위 동시 충족 종목
 
 import { fetchUpbitCandles, fetchUpbitCandles5M } from "@/lib/upbitCandles";
+import { fetchBithumbCandles, fetchBithumbCandles5M } from "@/lib/bithumbCandles";
 import { createConcurrencyLimiter } from "@/lib/rateLimiter";
 import { fetchAllMarkets } from "@/lib/markets";
 
@@ -19,6 +20,7 @@ function calculateMA(closes: number[], period: number): number {
 export interface DivergenceItem {
   symbol: string;
   market: string;
+  exchange: 'upbit' | 'bithumb';
   currentPrice: number;
   volume: number;
   ma50_1h: number;
@@ -38,17 +40,21 @@ export interface DivergenceResponse {
 export async function POST() {
   try {
     const allMarkets = await fetchAllMarkets();
-    const upbitMarkets = allMarkets.filter((m) => m.exchange === "upbit");
 
-    console.log(`[ma50-scan] 스캔 대상: ${upbitMarkets.length}종목`);
+    console.log(`[ma50-scan] 스캔 대상: ${allMarkets.length}종목 (업비트+빗썸)`);
 
     const results = await Promise.all(
-      upbitMarkets.map((item) =>
+      allMarkets.map((item) =>
         limit(async () => {
           try {
+            const isUpbit = item.exchange === "upbit";
             const [candles1h, candles5m] = await Promise.all([
-              fetchUpbitCandles(item.market, 60),
-              fetchUpbitCandles5M(item.market, 60),
+              isUpbit
+                ? fetchUpbitCandles(item.market, 60)
+                : fetchBithumbCandles(item.market, 60),
+              isUpbit
+                ? fetchUpbitCandles5M(item.market, 60)
+                : fetchBithumbCandles5M(item.market, 60),
             ]);
 
             if (candles1h.length < 50 || candles5m.length < 50) return null;
@@ -72,6 +78,7 @@ export async function POST() {
             return {
               symbol: item.symbol,
               market: item.market,
+              exchange: item.exchange,
               currentPrice,
               volume: item.volume,
               ma50_1h,
@@ -87,17 +94,16 @@ export async function POST() {
     );
 
     const items = results.filter((r): r is DivergenceItem => r !== null);
-    // 거래대금 높은 순 정렬
     items.sort((a, b) => b.volume - a.volume);
 
     const response: DivergenceResponse = {
       items,
-      scannedCount: upbitMarkets.length,
+      scannedCount: allMarkets.length,
       matchedCount: items.length,
       scannedAt: new Date().toISOString(),
     };
 
-    console.log(`[ma50-scan] 완료: ${items.length}/${upbitMarkets.length} 종목 발견`);
+    console.log(`[ma50-scan] 완료: ${items.length}/${allMarkets.length} 종목 발견`);
 
     return Response.json(response);
   } catch (err: any) {

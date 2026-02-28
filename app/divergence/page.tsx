@@ -238,6 +238,13 @@ export default function DivergencePage() {
                                 {item.symbol}
                               </div>
                               <div className="flex items-center gap-1 mt-0.5">
+                                <span className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded border font-bold ${
+                                  item.exchange === 'upbit'
+                                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/20'
+                                    : 'bg-orange-500/15 text-orange-400 border-orange-500/20'
+                                }`}>
+                                  {item.exchange === 'upbit' ? '업비트' : '빗썸'}
+                                </span>
                                 <span className="text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">
                                   1H↑MA50
                                 </span>
