@@ -123,7 +123,7 @@ export default function ChartModal({ item, onClose }: Props) {
           if (data.sma110?.length) {
             const ma110Series = chart.addLineSeries({
               color: '#f97316',
-              lineWidth: 1.5,
+              lineWidth: 1,
               title: 'MA110',
               priceLineVisible: false,
               lastValueVisible: true,
@@ -133,7 +133,7 @@ export default function ChartModal({ item, onClose }: Props) {
           if (data.sma180?.length) {
             const ma180Series = chart.addLineSeries({
               color: '#ef4444',
-              lineWidth: 1.5,
+              lineWidth: 1,
               title: 'MA180',
               priceLineVisible: false,
               lastValueVisible: true,
