@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Header from '../components/Header';
 import { useAuth } from '@/contexts/AuthContext';
-import type { DivergenceItem, DivergenceResponse } from '../api/divergence/route';
+import type { RsiScanItem, RsiScanResponse } from '../api/rsi-scanner/route';
 
 const ChartModal = dynamic(() => import('./ChartModal'), { ssr: false });
 
@@ -30,16 +30,19 @@ function formatRemaining(ms: number): string {
   return `${h}시간 ${m}분`;
 }
 
-function Ma50Badge({ ma50, pct, near }: { ma50: number; pct: number; near?: boolean }) {
-  const isAbove = pct >= 0;
-  const color = near
-    ? isAbove ? 'text-green-400' : 'text-red-400'
-    : 'text-green-400';
-  const sign = isAbove ? '+' : '';
+function RsiBadge({ rsi }: { rsi: number }) {
+  const color =
+    rsi <= 25 ? 'text-blue-400' :
+    rsi <= 35 ? 'text-cyan-400' :
+    'text-yellow-400';
+  const bg =
+    rsi <= 25 ? 'bg-blue-500/10 border-blue-500/20' :
+    rsi <= 35 ? 'bg-cyan-500/10 border-cyan-500/20' :
+    'bg-yellow-500/10 border-yellow-500/20';
+
   return (
-    <div className="flex flex-col items-end gap-0.5">
-      <span className="text-[10px] sm:text-xs text-zinc-400 font-mono">{formatPrice(ma50)}</span>
-      <span className={`text-[9px] sm:text-[10px] ${color} font-bold`}>{sign}{pct.toFixed(2)}%</span>
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border font-bold font-mono text-sm ${color} ${bg}`}>
+      {rsi.toFixed(1)}
     </div>
   );
 }
@@ -68,7 +71,7 @@ function AccessGate({
   if (trialStatus.status === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <div className="w-8 h-8 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
         <p className="text-sm text-zinc-400">접근 권한 확인 중...</p>
       </div>
     );
@@ -78,17 +81,17 @@ function AccessGate({
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-8 text-center max-w-sm w-full">
-          <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-5">
-            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
           <h2 className="text-base font-bold text-white mb-2">로그인이 필요합니다</h2>
           <p className="text-xs text-zinc-400 mb-1">
             구글 계정으로 로그인하면
           </p>
-          <p className="text-sm font-bold text-green-400 mb-6">
+          <p className="text-sm font-bold text-blue-400 mb-6">
             1일 무료 이용권이 즉시 지급됩니다
           </p>
           <button
@@ -111,25 +114,25 @@ function AccessGate({
   if (trialStatus.status === 'no_trial') {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <div className="bg-zinc-900 border border-green-500/30 rounded-2xl p-8 text-center max-w-sm w-full">
-          <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-5">
-            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-8 text-center max-w-sm w-full">
+          <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <div className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 font-bold inline-block mb-3">
+          <div className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold inline-block mb-3">
             첫 방문 혜택
           </div>
           <h2 className="text-base font-bold text-white mb-2">1일 무료 이용권</h2>
           <p className="text-xs text-zinc-400 mb-2">
-            MA50 스캐너를 <strong className="text-white">24시간</strong> 무료로 이용할 수 있습니다.
+            RSI+역배열 스캐너를 <strong className="text-white">24시간</strong> 무료로 이용할 수 있습니다.
           </p>
           <p className="text-[10px] text-zinc-600 mb-6">계정당 1회만 사용 가능 · 중복 사용 불가</p>
           <button
             onClick={onStartTrial}
             disabled={starting}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors"
           >
             {starting ? (
               <>
@@ -183,7 +186,7 @@ function AccessGate({
 }
 
 /* ── 메인 ─────────────────────────────────────────────────────────────── */
-export default function DivergencePage() {
+export default function RsiScannerPage() {
   const { user, isPremium, loading: authLoading } = useAuth();
 
   const [trialStatus, setTrialStatus] = useState<TrialStatus>({ status: 'loading' });
@@ -191,9 +194,9 @@ export default function DivergencePage() {
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
   const [isScanning, setIsScanning] = useState(false);
-  const [result, setResult] = useState<DivergenceResponse | null>(null);
+  const [result, setResult] = useState<RsiScanResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<DivergenceItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<RsiScanItem | null>(null);
 
   /* 트라이얼 상태 로드 */
   useEffect(() => {
@@ -255,7 +258,6 @@ export default function DivergencePage() {
         setTrialStatus({ status: 'active', remainingMs: data.remainingMs, expiresAt: data.expiresAt });
         setRemainingMs(data.remainingMs);
       } else {
-        // 이미 사용했거나 만료
         if (data.status === 'active') {
           setTrialStatus({ status: 'active', remainingMs: data.remainingMs ?? 0, expiresAt: data.expiresAt });
           setRemainingMs(data.remainingMs ?? 0);
@@ -276,7 +278,7 @@ export default function DivergencePage() {
     setScanError(null);
     setResult(null);
     try {
-      const res = await fetch('/api/divergence', { method: 'POST' });
+      const res = await fetch('/api/rsi-scanner', { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
     } catch (e: any) {
@@ -296,12 +298,15 @@ export default function DivergencePage() {
 
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* 페이지 헤더 */}
-        <div className="mb-4 sm:mb-6 rounded-xl border border-green-500/20 bg-linear-to-br from-zinc-900 via-zinc-900 to-green-950/20 p-4 sm:p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="mb-4 sm:mb-6 rounded-xl border border-blue-500/20 bg-linear-to-br from-zinc-900 via-zinc-900 to-blue-950/20 p-4 sm:p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
-                MA50 위
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                1H RSI ≈ 30
+              </span>
+              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                5M 역배열
               </span>
               <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
                 업비트 · 빗썸 전종목
@@ -313,13 +318,13 @@ export default function DivergencePage() {
               )}
             </div>
             <h1 className="text-lg sm:text-2xl font-bold text-white mb-1.5">
-              MA50 스캐너
+              RSI + 역배열 스캐너
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-              <span className="text-cyan-400 font-semibold">1시간봉 MA50 위</span>에 있으면서{' '}
-              <span className="text-green-400 font-semibold">5분봉 MA50 근처(±2%)</span>에 있는 종목을 표시합니다.
+              <span className="text-blue-400 font-semibold">1시간봉 RSI14가 30 근처(20~40)</span>이면서{' '}
+              <span className="text-red-400 font-semibold">5분봉 MA50 &lt; MA110 &lt; MA180 역배열</span> 종목을 표시합니다.
               <br />
-              <span className="text-zinc-500">중기 상승 추세 유지 + 단기 MA50 근접 구간 필터</span>
+              <span className="text-zinc-500">과매도권 진입 + 단기 하락 추세 필터 — 바닥 탐색용 참고 지표</span>
             </p>
           </div>
         </div>
@@ -337,24 +342,24 @@ export default function DivergencePage() {
             <div className="grid grid-cols-2 gap-3 mb-4 sm:mb-6">
               <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 sm:p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
                   <span className="text-xs sm:text-sm font-bold text-white">1시간봉 조건</span>
                 </div>
                 <ul className="text-[10px] sm:text-xs text-zinc-400 space-y-1">
-                  <li>• 현재가 &gt; MA50 (50시간 이동평균)</li>
-                  <li>• 중기 상승 추세 확인</li>
-                  <li>• 최근 60개봉 기준 계산</li>
+                  <li>• RSI14 ∈ [20, 40] (30 근처)</li>
+                  <li>• 과매도권 또는 과매도 직전 구간</li>
+                  <li>• Wilder's EMA 방식 계산</li>
                 </ul>
               </div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 sm:p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
                   <span className="text-xs sm:text-sm font-bold text-white">5분봉 조건</span>
                 </div>
                 <ul className="text-[10px] sm:text-xs text-zinc-400 space-y-1">
-                  <li>• |현재가 - MA50| / MA50 ≤ 2%</li>
-                  <li>• MA50 근처 (위 또는 아래 ±2%)</li>
-                  <li>• 최근 60개봉 기준 계산</li>
+                  <li>• <span className="text-yellow-400">MA50</span> &lt; <span className="text-orange-400">MA110</span> &lt; <span className="text-red-400">MA180</span></li>
+                  <li>• 역배열 = 단기 하락 추세 진행 중</li>
+                  <li>• 최근 200봉 기준 계산</li>
                 </ul>
               </div>
             </div>
@@ -381,19 +386,19 @@ export default function DivergencePage() {
                   <div className="text-[9px] sm:text-[11px] text-zinc-400">업비트 · 빗썸</div>
                 </div>
                 <div className="bg-zinc-800/60 rounded-lg p-2 sm:p-3 text-center">
-                  <div className="text-base sm:text-xl font-bold text-cyan-400">1H</div>
-                  <div className="text-[9px] sm:text-[11px] text-zinc-400">1시간봉 MA50</div>
+                  <div className="text-base sm:text-xl font-bold text-blue-400">RSI</div>
+                  <div className="text-[9px] sm:text-[11px] text-zinc-400">1H RSI14 ≈ 30</div>
                 </div>
                 <div className="bg-zinc-800/60 rounded-lg p-2 sm:p-3 text-center">
-                  <div className="text-base sm:text-xl font-bold text-green-400">5M</div>
-                  <div className="text-[9px] sm:text-[11px] text-zinc-400">5분봉 MA50 근처</div>
+                  <div className="text-base sm:text-xl font-bold text-red-400">역배열</div>
+                  <div className="text-[9px] sm:text-[11px] text-zinc-400">5M MA50↓110↓180</div>
                 </div>
               </div>
 
               <button
                 onClick={handleScan}
                 disabled={isScanning}
-                className="w-full bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold py-2.5 sm:py-3 px-4 rounded-lg transition-colors text-sm sm:text-base flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold py-2.5 sm:py-3 px-4 rounded-lg transition-colors text-sm sm:text-base flex items-center justify-center gap-2"
               >
                 {isScanning ? (
                   <>
@@ -401,10 +406,10 @@ export default function DivergencePage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    스캔 중... (1시간봉 MA50 위 + 5분봉 MA50 근처)
+                    스캔 중... (1H RSI ≈ 30 + 5M 역배열)
                   </>
                 ) : (
-                  'MA50 스캔 시작'
+                  'RSI + 역배열 스캔 시작'
                 )}
               </button>
 
@@ -423,11 +428,11 @@ export default function DivergencePage() {
                     <h2 className="text-sm sm:text-base font-bold text-white">스캔 결과</h2>
                     <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">
                       {result.scannedCount}종목 중{' '}
-                      <span className="text-green-400 font-bold">{result.matchedCount}종목</span> 발견
+                      <span className="text-blue-400 font-bold">{result.matchedCount}종목</span> 발견
                     </p>
                   </div>
                   {result.matchedCount > 0 && (
-                    <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 font-bold">
+                    <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold">
                       {result.matchedCount}개 매칭
                     </span>
                   )}
@@ -441,6 +446,7 @@ export default function DivergencePage() {
                       </svg>
                     </div>
                     <p className="text-sm text-zinc-500">현재 조건에 맞는 종목이 없습니다</p>
+                    <p className="text-xs text-zinc-600 mt-1">시장 상황에 따라 매칭 종목이 없을 수 있습니다</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -451,10 +457,10 @@ export default function DivergencePage() {
                           <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">현재가</th>
                           <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden sm:table-cell">거래대금</th>
                           <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4">
-                            <span className="text-cyan-400">1H</span> MA50
+                            <span className="text-blue-400">1H</span> RSI14
                           </th>
                           <th className="text-right text-[10px] sm:text-xs text-zinc-500 font-medium p-2 sm:p-4 hidden md:table-cell">
-                            <span className="text-green-400">5M</span> MA50 근처
+                            <span className="text-red-400">5M</span> 역배열
                           </th>
                         </tr>
                       </thead>
@@ -467,14 +473,14 @@ export default function DivergencePage() {
                           >
                             <td className="p-2 sm:p-4">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                                  <span className="text-[9px] sm:text-xs font-bold text-green-400">
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                                  <span className="text-[9px] sm:text-xs font-bold text-blue-400">
                                     {item.symbol.slice(0, 2)}
                                   </span>
                                 </div>
                                 <div>
                                   <div className="text-[11px] sm:text-sm font-semibold text-white">{item.symbol}</div>
-                                  <div className="flex items-center gap-1 mt-0.5">
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                                     <span className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded border font-bold ${
                                       item.exchange === 'upbit'
                                         ? 'bg-blue-500/15 text-blue-400 border-blue-500/20'
@@ -482,8 +488,8 @@ export default function DivergencePage() {
                                     }`}>
                                       {item.exchange === 'upbit' ? '업비트' : '빗썸'}
                                     </span>
-                                    <span className="text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">1H↑MA50</span>
-                                    <span className="text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/20">5M~MA50</span>
+                                    <span className="text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">RSI≈30</span>
+                                    <span className="text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">역배열</span>
                                   </div>
                                 </div>
                               </div>
@@ -495,10 +501,14 @@ export default function DivergencePage() {
                               <div className="text-xs text-zinc-400">₩{formatVolume(item.volume)}</div>
                             </td>
                             <td className="text-right p-2 sm:p-4">
-                              <Ma50Badge ma50={item.ma50_1h} pct={item.pctAbove1h} />
+                              <RsiBadge rsi={item.rsi14_1h} />
                             </td>
                             <td className="text-right p-2 sm:p-4 hidden md:table-cell">
-                              <Ma50Badge ma50={item.ma50_5m} pct={item.pctDiff5m} near />
+                              <div className="text-[10px] space-y-0.5 text-right">
+                                <div><span className="text-zinc-500">MA50 </span><span className="text-yellow-400 font-mono text-[9px]">{item.ma50_5m.toFixed(item.ma50_5m >= 100 ? 0 : 4)}</span></div>
+                                <div><span className="text-zinc-500">MA110 </span><span className="text-orange-400 font-mono text-[9px]">{item.ma110_5m.toFixed(item.ma110_5m >= 100 ? 0 : 4)}</span></div>
+                                <div><span className="text-zinc-500">MA180 </span><span className="text-red-400 font-mono text-[9px]">{item.ma180_5m.toFixed(item.ma180_5m >= 100 ? 0 : 4)}</span></div>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -523,7 +533,7 @@ export default function DivergencePage() {
             <div>
               <p className="font-medium text-zinc-300 mb-1">투자 주의사항</p>
               <ul className="text-zinc-500 space-y-0.5">
-                <li>• MA50 근처에 있다고 반드시 상승을 보장하지 않습니다</li>
+                <li>• RSI 과매도와 역배열이 동시에 나타나도 추가 하락이 발생할 수 있습니다</li>
                 <li>• 단독 지표로 매매 결정하지 마시고 다른 지표와 함께 참고하세요</li>
                 <li>• 이 정보는 투자 권유가 아닌 참고용 분석 데이터입니다</li>
               </ul>

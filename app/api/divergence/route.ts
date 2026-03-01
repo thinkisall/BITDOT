@@ -1,6 +1,6 @@
 // app/api/divergence/route.ts
-// 업비트 전종목 대상 MA50 위 종목 탐지
-// 조건: 5분봉 MA50 위 AND 1시간봉 MA50 위 동시 충족 종목
+// 업비트 전종목 대상 MA50 스캐너
+// 조건: 1시간봉 MA50 위 AND 5분봉 MA50 근처(±2%) 동시 충족 종목
 
 import { fetchUpbitCandles, fetchUpbitCandles5M } from "@/lib/upbitCandles";
 import { fetchBithumbCandles, fetchBithumbCandles5M } from "@/lib/bithumbCandles";
@@ -26,7 +26,7 @@ export interface DivergenceItem {
   ma50_1h: number;
   ma50_5m: number;
   pctAbove1h: number;  // 현재가가 1H MA50보다 몇 % 위인지
-  pctAbove5m: number;  // 현재가가 5M MA50보다 몇 % 위인지
+  pctDiff5m: number;   // 현재가와 5M MA50의 % 차이 (양수=위, 음수=아래)
 }
 
 export interface DivergenceResponse {
@@ -68,12 +68,12 @@ export async function POST() {
 
             if (isNaN(ma50_1h) || isNaN(ma50_5m)) return null;
 
-            // 5분봉 MA50 위 AND 1시간봉 MA50 위
-            if (currentPrice <= ma50_1h) return null;
-            if (currentPrice <= ma50_5m) return null;
-
             const pctAbove1h = ((currentPrice - ma50_1h) / ma50_1h) * 100;
-            const pctAbove5m = ((currentPrice - ma50_5m) / ma50_5m) * 100;
+            const pctDiff5m = ((currentPrice - ma50_5m) / ma50_5m) * 100;
+
+            // 1시간봉 MA50 위 AND 5분봉 MA50 근처(±2%)
+            if (currentPrice <= ma50_1h) return null;
+            if (Math.abs(pctDiff5m) > 2) return null;
 
             return {
               symbol: item.symbol,
@@ -84,7 +84,7 @@ export async function POST() {
               ma50_1h,
               ma50_5m,
               pctAbove1h,
-              pctAbove5m,
+              pctDiff5m,
             } satisfies DivergenceItem;
           } catch {
             return null;

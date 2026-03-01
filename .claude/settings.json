@@ -18,7 +18,20 @@
       "Bash(node -e \"fetch\\(''https://api.maketruthy.com/predict/lstm/top200/start'',{method:''POST'',headers:{''Content-Type'':''application/json''}}\\).then\\(r=>r.json\\(\\)\\).then\\(d=>console.log\\(JSON.stringify\\(d,null,2\\)\\)\\).catch\\(e=>console.error\\(e.message\\)\\)\")",
       "Bash(git remote get-url:*)",
       "Bash(git commit:*)",
-      "Read(//d/workspace/**)"
+      "Read(//d/workspace/**)",
+      "Bash(sc query cloudflared)",
+      "Bash(sc query type= all state= all)",
+      "Bash(where cloudflared)",
+      "Bash(sc query Cloudflared)",
+      "Bash(tasklist /FI \"IMAGENAME eq cloudflared.exe\")",
+      "Bash(netstat -ano)",
+      "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
+      "Bash(tasklist /FI \"PID eq 20476\")",
+      "Bash(tasklist)",
+      "Bash(nslookup api.maketruthy.com)",
+      "Bash(tasklist /FI \"IMAGENAME eq cloudflared.exe\" /FO LIST)",
+      "Bash(wmic process where \"name=''cloudflared.exe''\" get ProcessId,CommandLine)",
+      "Bash(# 7100 PID 서비스 확인 sc queryex type= all state= all)"
     ],
     "additionalDirectories": [
       "d:\\workspace\\BITDOT\\app\\api"

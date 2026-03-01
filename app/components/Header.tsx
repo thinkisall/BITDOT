@@ -49,7 +49,13 @@ export default function Header() {
             href="/divergence"
             className={`whitespace-nowrap transition-colors ${pathname === "/divergence" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
-            다이버전스
+            MA50
+          </Link>
+          <Link
+            href="/rsi-scanner"
+            className={`whitespace-nowrap transition-colors ${pathname === "/rsi-scanner" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            RSI
           </Link>
           <Link
             href="/funding"
@@ -173,7 +179,18 @@ export default function Header() {
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
                 }`}
               >
-                다이버전스
+                MA50 스캐너
+              </Link>
+              <Link
+                href="/rsi-scanner"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/rsi-scanner"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                RSI 스캐너
               </Link>
               <Link
                 href="/funding"

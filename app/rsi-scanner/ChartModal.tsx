@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { DivergenceItem } from '../api/divergence/route';
+import type { RsiScanItem } from '../api/rsi-scanner/route';
 
 interface Props {
-  item: DivergenceItem;
+  item: RsiScanItem;
   onClose: () => void;
 }
 
@@ -17,10 +17,16 @@ function formatPrice(price: number): string {
   return price.toFixed(6);
 }
 
+function getRsiColor(rsi: number): string {
+  if (rsi <= 25) return 'text-blue-400';
+  if (rsi <= 35) return 'text-cyan-400';
+  return 'text-yellow-400';
+}
+
 export default function ChartModal({ item, onClose }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
-  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
+  const [timeframe, setTimeframe] = useState<Timeframe>('5m');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,17 +46,14 @@ export default function ChartModal({ item, onClose }: Props) {
       setError(null);
 
       try {
-        // SSR 방지 dynamic import
         const { createChart, ColorType, CrosshairMode } = await import('lightweight-charts');
 
-        // 이전 차트 정리
         if (chartRef.current) {
           chartRef.current.remove();
           chartRef.current = null;
         }
         if (destroyed) return;
 
-        // 데이터 fetch
         const res = await fetch(
           `/api/chart?symbol=${item.symbol}&exchange=${item.exchange}&timeframe=${timeframe}`
         );
@@ -93,16 +96,50 @@ export default function ChartModal({ item, onClose }: Props) {
         });
         candleSeries.setData(data.candles);
 
-        // MA50 라인 (강조)
-        if (data.sma50?.length) {
-          const ma50Series = chart.addLineSeries({
-            color: '#facc15',
-            lineWidth: 2,
-            title: 'MA50',
-            priceLineVisible: false,
-            lastValueVisible: true,
-          });
-          ma50Series.setData(data.sma50);
+        if (timeframe === '1h') {
+          // 1시간봉: MA50만 표시
+          if (data.sma50?.length) {
+            const ma50Series = chart.addLineSeries({
+              color: '#facc15',
+              lineWidth: 2,
+              title: 'MA50',
+              priceLineVisible: false,
+              lastValueVisible: true,
+            });
+            ma50Series.setData(data.sma50);
+          }
+        } else {
+          // 5분봉: MA50(노란), MA110(주황), MA180(빨강) - 역배열 확인용
+          if (data.sma50?.length) {
+            const ma50Series = chart.addLineSeries({
+              color: '#facc15',
+              lineWidth: 2,
+              title: 'MA50',
+              priceLineVisible: false,
+              lastValueVisible: true,
+            });
+            ma50Series.setData(data.sma50);
+          }
+          if (data.sma110?.length) {
+            const ma110Series = chart.addLineSeries({
+              color: '#f97316',
+              lineWidth: 1.5,
+              title: 'MA110',
+              priceLineVisible: false,
+              lastValueVisible: true,
+            });
+            ma110Series.setData(data.sma110);
+          }
+          if (data.sma180?.length) {
+            const ma180Series = chart.addLineSeries({
+              color: '#ef4444',
+              lineWidth: 1.5,
+              title: 'MA180',
+              priceLineVisible: false,
+              lastValueVisible: true,
+            });
+            ma180Series.setData(data.sma180);
+          }
         }
 
         // 거래량
@@ -117,7 +154,6 @@ export default function ChartModal({ item, onClose }: Props) {
 
         chart.timeScale().fitContent();
 
-        // 리사이즈
         const ro = new ResizeObserver(() => {
           if (container && chartRef.current) {
             chartRef.current.applyOptions({ width: container.clientWidth });
@@ -143,28 +179,23 @@ export default function ChartModal({ item, onClose }: Props) {
         chartRef.current = null;
       }
     };
-  }, [item.symbol, timeframe]);
+  }, [item.symbol, item.exchange, timeframe]);
 
-  const ma50 = timeframe === '1h' ? item.ma50_1h : item.ma50_5m;
-  const pct = timeframe === '1h' ? item.pctAbove1h : item.pctDiff5m;
-  const pctSign = pct >= 0 ? '+' : '';
-  const pctColor = timeframe === '5m' && pct < 0 ? 'text-red-400' : 'text-green-400';
+  const rsiColor = getRsiColor(item.rsi14_1h);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* 배경 */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* 모달 */}
       <div className="relative w-full sm:max-w-3xl bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center">
-              <span className="text-xs font-bold text-green-400">{item.symbol.slice(0, 2)}</span>
+            <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <span className="text-xs font-bold text-blue-400">{item.symbol.slice(0, 2)}</span>
             </div>
             <div>
               <div className="text-sm font-bold text-white">{item.symbol} / KRW</div>
@@ -172,15 +203,16 @@ export default function ChartModal({ item, onClose }: Props) {
             </div>
           </div>
 
-          {/* MA50 정보 */}
-          <div className="hidden sm:flex items-center gap-4 text-xs">
+          <div className="hidden sm:flex items-center gap-5 text-xs">
             <div className="text-right">
-              <div className="text-zinc-500">MA50</div>
-              <div className="text-yellow-400 font-mono">₩{formatPrice(ma50)}</div>
+              <div className="text-zinc-500 mb-0.5">1H RSI14</div>
+              <div className={`${rsiColor} font-bold text-base`}>{item.rsi14_1h.toFixed(1)}</div>
             </div>
             <div className="text-right">
-              <div className="text-zinc-500">이격률</div>
-              <div className={`${pctColor} font-bold`}>{pctSign}{pct.toFixed(2)}%</div>
+              <div className="text-zinc-500 mb-0.5">5M 이동평균</div>
+              <div className="text-[10px] space-y-0.5">
+                <div><span className="text-yellow-400">MA50</span> &gt; <span className="text-orange-400">MA110</span> &gt; <span className="text-red-400">MA180</span> <span className="text-zinc-500">역배열</span></div>
+              </div>
             </div>
           </div>
 
@@ -196,23 +228,37 @@ export default function ChartModal({ item, onClose }: Props) {
 
         {/* 타임프레임 탭 */}
         <div className="flex gap-1 px-4 pt-3">
-          {(['1h', '5m'] as Timeframe[]).map((tf) => (
+          {(['5m', '1h'] as Timeframe[]).map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                 timeframe === tf
-                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40'
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
                   : 'bg-zinc-800 text-zinc-400 hover:text-white'
               }`}
             >
-              {tf === '1h' ? '1시간봉' : '5분봉'}
+              {tf === '1h' ? '1시간봉 (RSI)' : '5분봉 (역배열)'}
             </button>
           ))}
-          <div className="ml-auto flex items-center gap-3 text-[10px] text-zinc-500">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-6 h-0.5 bg-yellow-400" /> MA50
-            </span>
+          <div className="ml-auto flex items-center gap-2 text-[10px] text-zinc-500">
+            {timeframe === '1h' ? (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-5 h-0.5 bg-yellow-400" /> MA50
+              </span>
+            ) : (
+              <>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-4 h-0.5 bg-yellow-400" /> MA50
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-4 h-0.5 bg-orange-400" /> MA110
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-4 h-0.5 bg-red-400" /> MA180
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -221,7 +267,7 @@ export default function ChartModal({ item, onClose }: Props) {
           {loading && (
             <div className="h-[400px] flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
+                <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
                 <p className="text-xs text-zinc-400">차트 불러오는 중...</p>
               </div>
             </div>
@@ -237,15 +283,18 @@ export default function ChartModal({ item, onClose }: Props) {
           />
         </div>
 
-        {/* 하단 MA50 뱃지 (모바일) */}
+        {/* 하단 정보 (모바일) */}
         <div className="sm:hidden flex items-center gap-4 px-4 pb-4 text-xs">
           <div>
-            <span className="text-zinc-500">MA50 </span>
-            <span className="text-yellow-400 font-mono">₩{formatPrice(ma50)}</span>
+            <span className="text-zinc-500">RSI14 </span>
+            <span className={`${rsiColor} font-bold`}>{item.rsi14_1h.toFixed(1)}</span>
           </div>
-          <div>
-            <span className="text-zinc-500">이격 </span>
-            <span className={`${pctColor} font-bold`}>{pctSign}{pct.toFixed(2)}%</span>
+          <div className="text-zinc-500">
+            <span className="text-yellow-400">MA50</span>
+            {' < '}
+            <span className="text-orange-400">MA110</span>
+            {' < '}
+            <span className="text-red-400">MA180</span>
           </div>
         </div>
       </div>
