@@ -208,7 +208,15 @@ export default function AdminPage() {
 
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white mb-2">관리자 페이지</h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold text-white">관리자 페이지</h1>
+            <button
+              onClick={() => router.push('/admin/picks')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 text-sm font-semibold hover:bg-yellow-500/25 transition-colors"
+            >
+              🏆 오늘의 픽 설정
+            </button>
+          </div>
           <p className="text-sm text-zinc-400">
             유저 관리 및 프리미엄 상태 설정
           </p>

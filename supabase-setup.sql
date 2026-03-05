@@ -116,3 +116,28 @@ BEGIN
   UPDATE posts SET view_count = view_count + 1 WHERE id = post_id;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ── 오늘의 픽 테이블 ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS daily_picks (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  rank       INTEGER NOT NULL UNIQUE CHECK (rank BETWEEN 1 AND 5),
+  symbol     TEXT NOT NULL,
+  reason     TEXT,
+  updated_by TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE daily_picks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read daily_picks"
+  ON daily_picks FOR SELECT USING (TRUE);
+
+CREATE POLICY "Anyone can insert daily_picks"
+  ON daily_picks FOR INSERT WITH CHECK (TRUE);
+
+CREATE POLICY "Anyone can update daily_picks"
+  ON daily_picks FOR UPDATE USING (TRUE);
+
+CREATE POLICY "Anyone can delete daily_picks"
+  ON daily_picks FOR DELETE USING (TRUE);

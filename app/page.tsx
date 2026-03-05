@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Header from './components/Header';
 import PriceTicker from './components/PriceTicker';
 import MarketTable from './components/MarketTable';
+import DailyPicks from './components/DailyPicks';
 import { useMarketData } from './hooks/useMarketData';
 
 export default function Home() {
@@ -68,6 +69,9 @@ export default function Home() {
             </Link>
           </div>
         </div>
+
+        {/* 오늘의 픽 */}
+        <DailyPicks />
 
         {/* 돌파 타점 분석 배너 */}
         <div className="mb-4 sm:mb-6 rounded-xl border border-orange-500/20 bg-linear-to-r from-orange-950/20 to-zinc-900 p-4 sm:p-5">
