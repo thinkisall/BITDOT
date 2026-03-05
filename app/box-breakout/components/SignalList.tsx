@@ -411,8 +411,8 @@ export function SignalList({
                   {signal.ichimokuAboveCloudCount !== undefined && signal.ichimokuAboveCloudCount > 0 && (
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">일목구름</div>
-                      <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-mono text-xs">
-                        {signal.ichimokuAboveCloudCount}/6
+                      <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs">
+                        구름 위
                       </Badge>
                     </div>
                   )}
