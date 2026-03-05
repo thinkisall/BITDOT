@@ -160,14 +160,13 @@ function calculateMA(candles, period) {
 }
 
 function calculateIchimokuCloud(candles) {
-  if (candles.length < 52) return null;
-  const last9  = candles.slice(-9);
-  const last26 = candles.slice(-26);
-  const last52 = candles.slice(-52);
-  const conversion = (Math.max(...last9.map((c) => c.high))  + Math.min(...last9.map((c) => c.low)))  / 2;
-  const base       = (Math.max(...last26.map((c) => c.high)) + Math.min(...last26.map((c) => c.low))) / 2;
-  const spanA      = (conversion + base) / 2;
-  const spanB      = (Math.max(...last52.map((c) => c.high)) + Math.min(...last52.map((c) => c.low))) / 2;
+  // 선행스팬은 26기간 앞에 그려지므로, 현재 위치의 구름은 26기간 전 데이터로 계산
+  if (candles.length < 78) return null; // 52 + 26
+  const base = candles.slice(0, candles.length - 26); // 26기간 전까지의 데이터
+  const conversion = (Math.max(...base.slice(-9).map((c) => c.high))  + Math.min(...base.slice(-9).map((c) => c.low)))  / 2;
+  const kijun      = (Math.max(...base.slice(-26).map((c) => c.high)) + Math.min(...base.slice(-26).map((c) => c.low))) / 2;
+  const spanA      = (conversion + kijun) / 2;
+  const spanB      = (Math.max(...base.slice(-52).map((c) => c.high)) + Math.min(...base.slice(-52).map((c) => c.low))) / 2;
   return { spanA, spanB, cloudTop: Math.max(spanA, spanB), cloudBottom: Math.min(spanA, spanB) };
 }
 

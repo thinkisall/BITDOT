@@ -74,7 +74,7 @@ async function fetchBithumbCandles(symbol, timeframe) {
   const url = `https://api.bithumb.com/public/candlestick/${symbol}_KRW/${tfMap[timeframe] || '1h'}`;
   const data = await fetchJson(url);
   if (data.status !== '0000' || !Array.isArray(data.data)) return [];
-  return data.data.slice(-100).map((c) => ({
+  return data.data.slice(-200).map((c) => ({
     time: Number(c[0]),
     open: parseFloat(c[1]),
     close: parseFloat(c[2]),
@@ -130,13 +130,15 @@ function calcMA(candles, period) {
 }
 
 function calcIchimoku(candles) {
-  if (candles.length < 52) return null;
-  const h9 = Math.max(...candles.slice(-9).map((c) => c.high));
-  const l9 = Math.min(...candles.slice(-9).map((c) => c.low));
-  const h26 = Math.max(...candles.slice(-26).map((c) => c.high));
-  const l26 = Math.min(...candles.slice(-26).map((c) => c.low));
-  const h52 = Math.max(...candles.slice(-52).map((c) => c.high));
-  const l52 = Math.min(...candles.slice(-52).map((c) => c.low));
+  // 선행스팬은 26기간 앞에 그려지므로, 현재 위치의 구름은 26기간 전 데이터로 계산
+  if (candles.length < 78) return null; // 52 + 26
+  const base = candles.slice(0, candles.length - 26); // 26기간 전까지의 데이터
+  const h9  = Math.max(...base.slice(-9).map((c) => c.high));
+  const l9  = Math.min(...base.slice(-9).map((c) => c.low));
+  const h26 = Math.max(...base.slice(-26).map((c) => c.high));
+  const l26 = Math.min(...base.slice(-26).map((c) => c.low));
+  const h52 = Math.max(...base.slice(-52).map((c) => c.high));
+  const l52 = Math.min(...base.slice(-52).map((c) => c.low));
   const spanA = ((h9 + l9) / 2 + (h26 + l26) / 2) / 2;
   const spanB = (h52 + l52) / 2;
   return { cloudTop: Math.max(spanA, spanB), cloudBottom: Math.min(spanA, spanB) };
