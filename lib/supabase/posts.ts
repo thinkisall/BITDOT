@@ -84,10 +84,12 @@ export async function updatePost(
   }
 }
 
-export async function deletePost(postId: string, userUid: string): Promise<void> {
-  const res = await fetch(`/api/board/posts/${postId}`, {
+export async function deletePost(postId: string, userUid: string, userEmail?: string): Promise<void> {
+  const headers: Record<string, string> = { 'x-user-uid': userUid };
+  if (userEmail) headers['x-user-email'] = userEmail;
+  const res = await fetch(`/api/community-delete?postId=${postId}`, {
     method: 'DELETE',
-    headers: { 'x-user-uid': userUid },
+    headers,
   });
 
   if (!res.ok) {

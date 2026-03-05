@@ -11,8 +11,12 @@ interface PostCardProps {
   onDeleted?: (postId: string) => void;
 }
 
+const ADMIN_EMAILS = ['thinkisall@gmail.com', 'bitdamoabom@gmail.com'];
+
 export default function PostCard({ post, user, onDeleted }: PostCardProps) {
   const isAuthor = user?.uid === post.author_id;
+  const isAdmin = ADMIN_EMAILS.includes(user?.email || '');
+  const canDelete = isAuthor || isAdmin;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -21,7 +25,7 @@ export default function PostCard({ post, user, onDeleted }: PostCardProps) {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      await deletePost(post.id, user!.uid);
+      await deletePost(post.id, user!.uid, user!.email || undefined);
       onDeleted?.(post.id);
     } catch (error: any) {
       console.error('Error deleting post:', error);
@@ -85,7 +89,7 @@ export default function PostCard({ post, user, onDeleted }: PostCardProps) {
             </div>
           </div>
 
-          {isAuthor && (
+          {canDelete && (
             <button
               onClick={handleDelete}
               className="shrink-0 px-2 py-1 rounded text-[10px] sm:text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"

@@ -8,9 +8,10 @@ interface PostDetailProps {
   post: Post;
   isAuthor: boolean;
   userUid?: string;
+  userEmail?: string;
 }
 
-export default function PostDetail({ post, isAuthor, userUid }: PostDetailProps) {
+export default function PostDetail({ post, isAuthor, userUid, userEmail }: PostDetailProps) {
   const router = useRouter();
 
   const formatDate = (dateString: string) => {
@@ -30,7 +31,7 @@ export default function PostDetail({ post, isAuthor, userUid }: PostDetailProps)
     }
 
     try {
-      await deletePost(post.id, userUid!);
+      await deletePost(post.id, userUid!, userEmail);
       window.location.href = '/board';
     } catch (error) {
       console.error('Error deleting post:', error);

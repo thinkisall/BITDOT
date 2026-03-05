@@ -70,6 +70,12 @@ export default function Header() {
             펀딩비
           </Link>
           <Link
+            href="/community"
+            className={`whitespace-nowrap transition-colors ${pathname?.startsWith("/community") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            분석커뮤니티
+          </Link>
+          <Link
             href="/board"
             className={`whitespace-nowrap transition-colors ${pathname?.startsWith("/board") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -219,6 +225,17 @@ export default function Header() {
                 }`}
               >
                 펀딩비
+              </Link>
+              <Link
+                href="/community"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname?.startsWith("/community")
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                분석커뮤니티
               </Link>
               <Link
                 href="/board"

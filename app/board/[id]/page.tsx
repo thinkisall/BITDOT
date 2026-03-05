@@ -77,7 +77,7 @@ export default function PostDetailPage() {
         </div>
 
         <div className="space-y-4 sm:space-y-6">
-          <PostDetail post={post} isAuthor={user?.uid === post.author_id} userUid={user?.uid} />
+          <PostDetail post={post} isAuthor={user?.uid === post.author_id} userUid={user?.uid} userEmail={user?.email || undefined} />
           <CommentList postId={post.id} user={user} />
         </div>
       </main>
