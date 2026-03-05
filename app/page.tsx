@@ -69,6 +69,39 @@ export default function Home() {
           </div>
         </div>
 
+        {/* 돌파 타점 분석 배너 */}
+        <div className="mb-4 sm:mb-6 rounded-xl border border-orange-500/20 bg-linear-to-r from-orange-950/20 to-zinc-900 p-4 sm:p-5">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-col sm:flex-row">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-orange-500/15 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm sm:text-base font-bold text-white mb-1">
+                <span className="text-orange-400">박스권 돌파</span> 타점 분석
+              </div>
+              <p className="text-[10px] sm:text-xs text-zinc-400 leading-relaxed">
+                업비트·빗썸 전종목에서 <strong className="text-zinc-300">박스권 + 거래량 급등</strong> 조건으로 돌파 직전 종목을 포착합니다.
+                매수가·손절가·목표가를 자동으로 계산합니다.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {['실시간 박스권 탐지', '자동 타점 계산', 'BTC 상대강도 분석'].map((text) => (
+                  <span key={text} className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                    {text}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Link
+              href="/box-breakout"
+              className="shrink-0 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg transition-colors text-xs sm:text-sm whitespace-nowrap"
+            >
+              분석 보기
+            </Link>
+          </div>
+        </div>
+
         {/* MA50 위 종목 스캐너 배너 */}
         <div className="mb-4 sm:mb-6 rounded-xl border border-green-500/20 bg-linear-to-r from-green-950/20 to-zinc-900 p-4 sm:p-5">
           <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-col sm:flex-row">

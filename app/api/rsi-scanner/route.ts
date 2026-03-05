@@ -56,11 +56,25 @@ export interface RsiScanItem {
   ma180_5m: number;   // 5분봉 MA180
 }
 
+// ── 진단 카운터 타입 ──────────────────────────────────────────────────────
+interface ExchangeStat {
+  total: number;
+  errors: number;
+  shortCandles: number; // 캔들 수 부족
+  rsiFiltered: number;  // RSI 조건 탈락
+  maFiltered: number;   // 역배열 조건 탈락
+  matched: number;
+}
+
 export interface RsiScanResponse {
   items: RsiScanItem[];
   scannedCount: number;
   matchedCount: number;
   scannedAt: string;
+  debug: {
+    upbit: ExchangeStat;
+    bithumb: ExchangeStat;
+  };
 }
 
 // ── Route Handler ─────────────────────────────────────────────────────────
@@ -68,13 +82,20 @@ export async function POST() {
   try {
     const allMarkets = await fetchAllMarkets();
 
+    const stat: Record<'upbit' | 'bithumb', ExchangeStat> = {
+      upbit:   { total: 0, errors: 0, shortCandles: 0, rsiFiltered: 0, maFiltered: 0, matched: 0 },
+      bithumb: { total: 0, errors: 0, shortCandles: 0, rsiFiltered: 0, maFiltered: 0, matched: 0 },
+    };
+
     console.log(`[rsi-scan] 스캔 대상: ${allMarkets.length}종목 (업비트+빗썸)`);
 
     const results = await Promise.all(
       allMarkets.map((item) =>
         limit(async () => {
+          const ex = item.exchange;
+          stat[ex].total++;
           try {
-            const isUpbit = item.exchange === "upbit";
+            const isUpbit = ex === "upbit";
             const [candles1h, candles5m] = await Promise.all([
               isUpbit
                 ? fetchUpbitCandles(item.market, 100)
@@ -85,7 +106,10 @@ export async function POST() {
             ]);
 
             // RSI14 최소 30봉, MA180 최소 180봉 필요
-            if (candles1h.length < 30 || candles5m.length < 180) return null;
+            if (candles1h.length < 30 || candles5m.length < 180) {
+              stat[ex].shortCandles++;
+              return null;
+            }
 
             const closes1h = candles1h.map((c) => c.close);
             const closes5m = candles5m.map((c) => c.close);
@@ -95,14 +119,24 @@ export async function POST() {
             const ma110_5m = calculateMA(closes5m, 110);
             const ma180_5m = calculateMA(closes5m, 180);
 
-            if (isNaN(rsi14_1h) || isNaN(ma50_5m) || isNaN(ma110_5m) || isNaN(ma180_5m)) return null;
+            if (isNaN(rsi14_1h) || isNaN(ma50_5m) || isNaN(ma110_5m) || isNaN(ma180_5m)) {
+              stat[ex].errors++;
+              return null;
+            }
 
             // 1) 1시간봉 RSI14가 20~40 사이 (30 근처 과매도권)
-            if (rsi14_1h < 20 || rsi14_1h > 40) return null;
+            if (rsi14_1h < 20 || rsi14_1h > 40) {
+              stat[ex].rsiFiltered++;
+              return null;
+            }
 
             // 2) 5분봉 역배열: MA50 < MA110 < MA180
-            if (!(ma50_5m < ma110_5m && ma110_5m < ma180_5m)) return null;
+            if (!(ma50_5m < ma110_5m && ma110_5m < ma180_5m)) {
+              stat[ex].maFiltered++;
+              return null;
+            }
 
+            stat[ex].matched++;
             const currentPrice = closes1h[closes1h.length - 1];
 
             return {
@@ -116,7 +150,9 @@ export async function POST() {
               ma110_5m,
               ma180_5m,
             } satisfies RsiScanItem;
-          } catch {
+          } catch (e: any) {
+            stat[ex].errors++;
+            console.error(`[rsi-scan] ${item.symbol} 오류: ${e?.message}`);
             return null;
           }
         })
@@ -126,14 +162,16 @@ export async function POST() {
     const items = results.filter((r): r is RsiScanItem => r !== null);
     items.sort((a, b) => b.volume - a.volume);
 
+    console.log(`[rsi-scan] 업비트:`, stat.upbit);
+    console.log(`[rsi-scan] 빗썸:`, stat.bithumb);
+
     const response: RsiScanResponse = {
       items,
       scannedCount: allMarkets.length,
       matchedCount: items.length,
       scannedAt: new Date().toISOString(),
+      debug: { upbit: stat.upbit, bithumb: stat.bithumb },
     };
-
-    console.log(`[rsi-scan] 완료: ${items.length}/${allMarkets.length} 종목 발견`);
 
     return Response.json(response);
   } catch (err: any) {

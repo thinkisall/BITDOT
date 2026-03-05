@@ -26,12 +26,9 @@ export async function GET() {
     const tokens = data?.data || [];
     const symbols = tokens.map((token: any) => token.symbol || token.name || '').filter(Boolean);
 
-    return NextResponse.json({ symbols });
+    return NextResponse.json(symbols.map((s: string) => ({ symbol: s })));
   } catch (error: any) {
     console.error('Binance Alpha API error:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Failed to fetch Binance Alpha data', symbols: [] },
-      { status: 500 }
-    );
+    return NextResponse.json([]);
   }
 }

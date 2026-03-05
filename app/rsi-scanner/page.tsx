@@ -423,18 +423,57 @@ export default function RsiScannerPage() {
             {/* 결과 */}
             {result && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
-                <div className="p-3 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm sm:text-base font-bold text-white">스캔 결과</h2>
-                    <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">
-                      {result.scannedCount}종목 중{' '}
-                      <span className="text-blue-400 font-bold">{result.matchedCount}종목</span> 발견
-                    </p>
+                <div className="p-3 sm:p-5 border-b border-zinc-800">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h2 className="text-sm sm:text-base font-bold text-white">스캔 결과</h2>
+                      <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">
+                        {result.scannedCount}종목 중{' '}
+                        <span className="text-blue-400 font-bold">{result.matchedCount}종목</span> 발견
+                      </p>
+                    </div>
+                    {result.matchedCount > 0 && (
+                      <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold">
+                        {result.matchedCount}개 매칭
+                      </span>
+                    )}
                   </div>
-                  {result.matchedCount > 0 && (
-                    <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold">
-                      {result.matchedCount}개 매칭
-                    </span>
+                  {/* 진단 테이블 */}
+                  {result.debug && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['upbit', 'bithumb'] as const).map((ex) => {
+                        const d = result.debug[ex];
+                        return (
+                          <div key={ex} className="bg-zinc-800/50 rounded-lg p-2 text-[10px]">
+                            <div className={`font-bold mb-1 ${ex === 'upbit' ? 'text-blue-400' : 'text-orange-400'}`}>
+                              {ex === 'upbit' ? '업비트' : '빗썸'} ({d.total}종목)
+                            </div>
+                            <div className="space-y-0.5 text-zinc-400">
+                              <div className="flex justify-between">
+                                <span>API 오류</span>
+                                <span className={d.errors > 0 ? 'text-red-400 font-bold' : 'text-zinc-500'}>{d.errors}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>캔들 부족</span>
+                                <span className={d.shortCandles > 0 ? 'text-yellow-400' : 'text-zinc-500'}>{d.shortCandles}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>RSI 탈락</span>
+                                <span className="text-zinc-400">{d.rsiFiltered}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>역배열 탈락</span>
+                                <span className="text-zinc-400">{d.maFiltered}</span>
+                              </div>
+                              <div className="flex justify-between border-t border-zinc-700 pt-0.5 mt-0.5">
+                                <span className="text-white font-bold">매칭</span>
+                                <span className={d.matched > 0 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{d.matched}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 

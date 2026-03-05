@@ -51,12 +51,19 @@ interface HistBin {
   count: number;
 }
 
-function buildHistogram(candles: Candle[], binCount = 60): HistBin[] {
+// recentRangePct: 가격 범위 결정에 사용할 최근 캔들 비율 (1.0 = 전체)
+// detectDensityBox에서는 0.5로 호출해 과거 펌프 고점이 범위를 왜곡하지 않도록 함
+function buildHistogram(candles: Candle[], binCount = 60, recentRangePct = 1.0): HistBin[] {
   if (candles.length === 0) return [];
 
-  // 이상치 제거 후 몸통 가격 범위
   const clean = removeOutliers(candles, 0.05);
-  const bodyPrices = clean.flatMap(c => [c.open, c.close]);
+
+  // 가격 범위 결정: recentRangePct < 1이면 최근 N개 캔들로만 범위 확정
+  const rangeCount = recentRangePct < 1.0
+    ? Math.min(clean.length, Math.max(24, Math.ceil(clean.length * recentRangePct)))
+    : clean.length;
+  const rangeCandles = clean.slice(-rangeCount);
+  const bodyPrices = rangeCandles.flatMap(c => [c.open, c.close]);
   const minP = Math.min(...bodyPrices);
   const maxP = Math.max(...bodyPrices);
   if (maxP <= minP) return [];
@@ -69,6 +76,7 @@ function buildHistogram(candles: Candle[], binCount = 60): HistBin[] {
     count: 0,
   }));
 
+  // 가중치 누적: 범위 결정과 무관하게 clean 전체 캔들 사용 (범위 밖 가격은 skip)
   for (const c of clean) {
     const vol = c.volume > 0 ? c.volume : 1;
     // 몸통 × 2, 꼬리 × 1 가중치
@@ -110,11 +118,14 @@ function findPOC(bins: HistBin[], smoothed: number[]): number {
 }
 
 // ─── POC 중심으로 박스 확장 ──────────────────────────────────────────────────
+// 두 가지 조건 중 하나라도 충족하면 확장 중단:
+//   1. 절대 cutoff: 다음 bin 밀도 < maxW * dropThreshold
+//   2. Valley 감지: 다음 bin 밀도 < 로컬 피크 대비 35% → 두 구간 사이 계곡
 function expandBox(
   bins: HistBin[],
   smoothed: number[],
   pocPrice: number,
-  dropThreshold = 0.12 // 최대 밀도의 12% 이하면 박스 경계
+  dropThreshold = 0.08 // 최대 밀도의 8% 이하면 박스 경계
 ): { top: number; bottom: number } {
   if (bins.length === 0) return { top: pocPrice, bottom: pocPrice };
 
@@ -124,14 +135,31 @@ function expandBox(
     0
   );
 
-  const maxW  = Math.max(...smoothed);
+  const maxW   = Math.max(...smoothed);
   const cutoff = maxW * dropThreshold;
 
   let topIdx    = pocIdx;
   let bottomIdx = pocIdx;
+  let localPeakUp   = smoothed[pocIdx];
+  let localPeakDown = smoothed[pocIdx];
 
-  while (topIdx + 1 < bins.length    && smoothed[topIdx + 1]    >= cutoff) topIdx++;
-  while (bottomIdx - 1 >= 0          && smoothed[bottomIdx - 1] >= cutoff) bottomIdx--;
+  // 상단 확장
+  while (topIdx + 1 < bins.length) {
+    const next = smoothed[topIdx + 1];
+    if (next < cutoff) break;                        // 절대 cutoff
+    localPeakUp = Math.max(localPeakUp, smoothed[topIdx]);
+    if (next < localPeakUp * 0.35) break;            // valley 감지
+    topIdx++;
+  }
+
+  // 하단 확장
+  while (bottomIdx - 1 >= 0) {
+    const next = smoothed[bottomIdx - 1];
+    if (next < cutoff) break;                        // 절대 cutoff
+    localPeakDown = Math.max(localPeakDown, smoothed[bottomIdx]);
+    if (next < localPeakDown * 0.35) break;          // valley 감지
+    bottomIdx--;
+  }
 
   return {
     top:    bins[topIdx].price    + binSize / 2,
@@ -151,21 +179,23 @@ interface DensityBox {
 function detectDensityBox(
   candles: Candle[],
   period: number,
-  minCandlesInBox: number
+  minCandlesInBox: number,
+  maxHeightPct = 0.04 // 박스 높이 상한 (타임프레임별로 다름)
 ): DensityBox | null {
   const target = candles.slice(-period);
   if (target.length < 20) return null;
 
-  const bins     = buildHistogram(target, 60);
+  // recentRangePct=0.5: 최근 50% 캔들로 가격 범위 확정 → 과거 펌프 고점 배제
+  const bins     = buildHistogram(target, 60, 0.5);
   if (bins.length === 0) return null;
 
   const smoothed = smoothBins(bins);
   const poc      = findPOC(bins, smoothed);
-  const { top, bottom } = expandBox(bins, smoothed, poc, 0.12);
+  const { top, bottom } = expandBox(bins, smoothed, poc, 0.08);
 
-  // 박스 높이 검증: 1.5% ~ 4%
+  // 박스 높이 검증: 1.5% ~ maxHeightPct
   const heightPct = (top - bottom) / bottom;
-  if (heightPct < 0.015 || heightPct > 0.04) return null;
+  if (heightPct < 0.015 || heightPct > maxHeightPct) return null;
 
   // close 기준 박스 내 캔들 수 (1% 여유)
   const inBox = target.filter(c => c.close <= top * 1.01 && c.close >= bottom * 0.99).length;
@@ -240,7 +270,8 @@ export function findSupportResistanceLevels(
 export function detectBoxRanges(
   levels: PriceLevel[],
   candles1h: Candle[],
-  minCandlesInBox = 10
+  minCandlesInBox = 10,
+  maxHeightPct = 0.04 // 박스 높이 상한: 4h=0.08, 1h=0.04, 30m/5m=0.02
 ): BoxRange[] {
   const boxes: BoxRange[] = [];
 
@@ -248,7 +279,7 @@ export function detectBoxRanges(
   const periods = [48, 72, 96, 120];
 
   for (const period of periods) {
-    const result = detectDensityBox(candles1h, period, minCandlesInBox);
+    const result = detectDensityBox(candles1h, period, minCandlesInBox, maxHeightPct);
     if (!result) continue;
 
     const { top, bottom, poc, density, candlesInRange } = result;

@@ -30,6 +30,10 @@ function createConcurrencyLimiter(concurrency) {
   };
 }
 
+// ── 업비트 전용 API rate limiter (동시 요청 5개 제한) ─────────────────────
+// 5심볼 × 5타임프레임 동시 fetch = 25개 동시 요청 → 업비트 rate limit 초과 방지
+const upbitApiLimit = createConcurrencyLimiter(5);
+
 // ── fetch 헬퍼 (타임아웃 포함) ────────────────────────────────────────────
 async function fetchJson(url, timeoutMs = 10000) {
   const controller = new AbortController();
@@ -43,12 +47,12 @@ async function fetchJson(url, timeoutMs = 10000) {
   }
 }
 
-// ── 업비트 캔들 fetch ─────────────────────────────────────────────────────
+// ── 업비트 캔들 fetch (rate limiter 적용) ────────────────────────────────
 async function fetchUpbitCandles(market, timeframe, count = 200) {
   const tfMap = { '5m': 'minutes/5', '30m': 'minutes/30', '1h': 'minutes/60', '4h': 'minutes/240', '1d': 'days' };
   const endpoint = tfMap[timeframe] || 'minutes/60';
   const url = `https://api.upbit.com/v1/candles/${endpoint}?market=${market}&count=${count}`;
-  const data = await fetchJson(url);
+  const data = await upbitApiLimit(() => fetchJson(url));
   if (!Array.isArray(data)) return [];
   return data.reverse().map((c) => ({
     timestamp: c.timestamp,
@@ -117,9 +121,15 @@ async function fetchBithumbMarkets() {
 function detectBoxRange(candles) {
   if (candles.length < 20) return null;
   const recent = candles.slice(-20);
-  const top    = Math.max(...recent.map((c) => c.high));
-  const bottom = Math.min(...recent.map((c) => c.low));
-  if (bottom === 0) return null;
+
+  // 스파이크 캔들 윗꼬리/아랫꼬리로 인한 상단 과대평가 방지
+  // 90번째 퍼센타일 고가, 10번째 퍼센타일 저가 사용
+  const highs  = recent.map((c) => c.high).sort((a, b) => a - b);
+  const lows   = recent.map((c) => c.low).sort((a, b) => a - b);
+  const top    = highs[Math.floor(highs.length * 0.9)];  // 상위 10% 제외
+  const bottom = lows[Math.floor(lows.length * 0.1)];    // 하위 10% 제외
+
+  if (!top || !bottom || bottom === 0) return null;
   const boxRange = ((top - bottom) / bottom) * 100;
   if (boxRange > 30) return null;
 
@@ -296,16 +306,9 @@ async function analyzeSymbol(item) {
 async function performAnalysis() {
   try {
     console.log('[Multi-TF] 마켓 목록 로드 중...');
-    const [upbitMarkets, bithumbMarkets] = await Promise.all([
-      fetchUpbitMarkets(),
-      fetchBithumbMarkets(),
-    ]);
+    const allMarkets = await fetchBithumbMarkets();
 
-    const upbitSymbols = new Set(upbitMarkets.map((m) => m.symbol));
-    const bithumbOnly  = bithumbMarkets.filter((m) => !upbitSymbols.has(m.symbol));
-    const allMarkets   = [...upbitMarkets, ...bithumbOnly].slice(0, 300);
-
-    console.log(`[Multi-TF] 분석 시작: ${allMarkets.length}종목`);
+    console.log(`[Multi-TF] 분석 시작: ${allMarkets.length}종목 (빗썸 전체)`);
 
     const limit = createConcurrencyLimiter(5);
     let done = 0;
