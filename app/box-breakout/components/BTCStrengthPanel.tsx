@@ -71,7 +71,12 @@ export function BTCStrengthPanel({
         throw new Error(json.error || "Failed to fetch");
       }
 
-      setData(json.data);
+      // API 응답 구조 검증 — 구 형식(BTCRelativeStrengthSummary)인 경우에만 표시
+      if (json.data && !Array.isArray(json.data) && typeof json.data.btcCurrentPrice === 'number') {
+        setData(json.data);
+      } else {
+        setData(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
