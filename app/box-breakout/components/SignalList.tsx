@@ -125,7 +125,7 @@ export function SignalList({
       const res = await fetch(getHomeServerUrl(`/api/box-breakout/symbol/${sym}`));
       if (res.ok) {
         const data = await res.json();
-        if (data.timeframes) setModalTimeframes(data.timeframes);
+        if (data.timeframes) setModalTimeframes({ ...fallback, ...data.timeframes });
       }
     } catch {}
     setModalLoading(false);

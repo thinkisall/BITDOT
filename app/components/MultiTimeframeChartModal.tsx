@@ -367,7 +367,7 @@ export default function MultiTimeframeChartModal({
         }
 
         // 박스권이 있는 경우 표시
-        const boxInfo = timeframes[activeTimeframe];
+        const boxInfo = timeframes[activeTimeframe] ?? { hasBox: false };
         if (boxInfo.hasBox && boxInfo.top && boxInfo.bottom) {
           // 박스 상단 라인
           const topLineSeries = chart.addLineSeries({
@@ -464,7 +464,7 @@ export default function MultiTimeframeChartModal({
         <div className="px-3 sm:px-5 pt-3 sm:pt-4 pb-0 border-b border-zinc-800/60 bg-black/20">
           <div className="flex gap-1 sm:gap-1.5 overflow-x-auto scrollbar-hide">
             {(Object.keys(TIMEFRAME_LABELS) as TimeframeKey[]).map((tf) => {
-              const boxInfo = timeframes[tf];
+              const boxInfo = timeframes[tf] ?? { hasBox: false };
               const isActive = activeTimeframe === tf;
               return (
                 <button
@@ -580,7 +580,7 @@ export default function MultiTimeframeChartModal({
           </div>
 
           {/* Box Info */}
-          {timeframes[activeTimeframe].hasBox && (
+          {(timeframes[activeTimeframe] ?? { hasBox: false }).hasBox && (
             <div className="mt-4 p-3 sm:p-4 bg-zinc-800/50 rounded-lg">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
@@ -612,7 +612,7 @@ export default function MultiTimeframeChartModal({
             </div>
           )}
 
-          {!timeframes[activeTimeframe].hasBox && (
+          {!(timeframes[activeTimeframe] ?? { hasBox: false }).hasBox && (
             <div className="mt-4 p-3 sm:p-4 bg-zinc-800/50 rounded-lg text-center">
               <p className="text-xs sm:text-sm text-zinc-400">
                 이 시간대에서는 박스권이 감지되지 않았습니다
