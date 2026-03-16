@@ -187,6 +187,23 @@ export default function LstmPage() {
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
+  const [generating, setGenerating] = useState(false);
+  const [generateMsg, setGenerateMsg] = useState('');
+
+  const startGeneration = useCallback(async () => {
+    setGenerating(true);
+    setGenerateMsg('');
+    try {
+      const res = await fetch('/api/predict-lstm', { method: 'POST' });
+      const json = await res.json();
+      setGenerateMsg(json.message || '예측 생성 시작됨. 완료까지 수 분 소요됩니다.');
+    } catch {
+      setGenerateMsg('시작 요청 실패. 서버 상태를 확인해주세요.');
+    } finally {
+      setGenerating(false);
+    }
+  }, []);
+
   /* ── 데이터 fetch (백그라운드 폴링용) ── */
   const fetchAll = useCallback(async () => {
     setFetching(true);
@@ -202,6 +219,9 @@ export default function LstmPage() {
         if (!selectedRef.current) {
           setSelected(data.results[0].symbol);
         }
+      } else if (!json.results || json.results.length === 0) {
+        // 데이터 없으면 자동으로 생성 시작
+        fetch('/api/predict-lstm', { method: 'POST' }).catch(() => {});
       }
       // 데이터 없으면 기존 캐시 유지 (allData 건드리지 않음)
     } catch {
@@ -315,11 +335,21 @@ export default function LstmPage() {
               </svg>
             </div>
             <div className="text-center">
-              <p className="text-white font-semibold mb-1">LSTM 학습 데이터 준비 중</p>
-              <p className="text-xs text-zinc-500 mb-3">데이터가 준비되면 자동으로 표시됩니다</p>
+              <p className="text-white font-semibold mb-1">LSTM 예측 데이터 없음</p>
+              <p className="text-xs text-zinc-500 mb-4">서버에 예측 데이터가 없습니다. 아래 버튼으로 생성을 시작하세요.</p>
+              <button
+                onClick={startGeneration}
+                disabled={generating}
+                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors mb-3"
+              >
+                {generating ? '시작 중...' : '예측 생성 시작'}
+              </button>
+              {generateMsg && (
+                <p className="text-xs text-cyan-400 mb-3">{generateMsg}</p>
+              )}
               <div className="flex items-center justify-center gap-2 text-xs text-zinc-600">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/60 animate-pulse" />
-                <span className="font-mono">{fmtCountdown(countdown)} 후 다시 확인</span>
+                <span className="font-mono">{fmtCountdown(countdown)} 후 자동 확인</span>
               </div>
             </div>
           </div>

@@ -58,6 +58,12 @@ export default function Header() {
             RSI
           </Link>
           <Link
+            href="/volume-scanner"
+            className={`whitespace-nowrap transition-colors ${pathname === "/volume-scanner" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            거래량 스캐너
+          </Link>
+          <Link
             href="/box-breakout"
             className={`whitespace-nowrap transition-colors ${pathname === "/box-breakout" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -203,6 +209,17 @@ export default function Header() {
                 }`}
               >
                 RSI 스캐너
+              </Link>
+              <Link
+                href="/volume-scanner"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/volume-scanner"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                거래량 스캐너
               </Link>
               <Link
                 href="/box-breakout"

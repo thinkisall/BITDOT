@@ -14,7 +14,6 @@ import {
   ShoppingCart,
   Zap,
   Eye,
-  Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -113,11 +112,6 @@ export function SignalList({
   const [modalLoading, setModalLoading] = useState(false);
 
   const handleCardClick = useCallback(async (signal: BoxBreakoutSignal, index: number) => {
-    const isLocked = index < 20 && !isPremium;
-    if (isLocked) {
-      router.push("/premium");
-      return;
-    }
 
     const sym = signal.symbol.replace("KRW", "");
 
@@ -254,7 +248,6 @@ export function SignalList({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {signals.map((signal, i) => {
           const index = (currentPage - 1) * itemsPerPage + i;
-          const isLocked = index < 20 && !isPremium;
           const isFavorite = favorites.has(signal.symbol);
           const isAlpha = isAlphaToken(signal.symbol);
 
@@ -272,19 +265,10 @@ export function SignalList({
               key={signal.symbol}
               className={cn(
                 "group relative overflow-hidden backdrop-blur-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-lg cursor-pointer",
-                statusStyle,
-                isLocked && "blur-sm"
+                statusStyle
               )}
               onClick={() => handleCardClick(signal, index)}
             >
-              {isLocked && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-                  <div className="text-center">
-                    <Lock className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm font-semibold text-muted-foreground">프리미엄 전용</p>
-                  </div>
-                </div>
-              )}
 
               <CardContent className="p-5">
                 {/* 상단: 순위 + 등급 */}

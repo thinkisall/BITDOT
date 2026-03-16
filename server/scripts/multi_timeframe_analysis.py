@@ -13,6 +13,7 @@ import json
 import sys
 import requests
 import time
+import numpy as np
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
@@ -119,51 +120,112 @@ def fetch_bithumb_candles(symbol: str, timeframe: str) -> List[Dict]:
         print(f"Error fetching Bithumb candles for {symbol}/{timeframe}: {e}", file=sys.stderr)
         return []
 
-def detect_box_range(candles: List[Dict]) -> Optional[Dict]:
-    """박스권 탐지 (간단한 버전)"""
-    if len(candles) < 20:
+def detect_box_range(candles: List[Dict], timeframe: str) -> Optional[Dict]:
+    """
+    매물대 기반 박스권 탐지 로직 (장대양봉 기준).
+    1. 기준 캔들(장대양봉) 탐색 (1h, 4h, 1d 봉만 해당)
+    2. 기준 캔들의 시가/종가를 기준으로 지지/저항 점수 계산
+    3. 가장 점수가 높은 가격대를 '키 레벨'로 설정
+    4. 키 레벨을 중심으로 박스권 형성
+    """
+    # 이 로직은 1시간봉, 4시간봉, 일봉에 대해서만 의미가 있음
+    if timeframe not in ['1h', '4h', '1d']:
         return None
 
-    recent = candles[-20:]  # 최근 20개 캔들
-
-    highs = [c['high'] for c in recent]
-    lows = [c['low'] for c in recent]
-
-    # 상단/하단 계산
-    top = max(highs)
-    bottom = min(lows)
-
-    # 박스권 폭이 너무 크면 무효
-    if top == 0:
+    if len(candles) < 150:
         return None
 
-    box_range = (top - bottom) / bottom * 100
-    if box_range > 30:  # 30% 이상 변동성은 박스권 아님
+    # 1. 기준 캔들 탐색
+    lookback_candles = candles[-150:]
+    
+    volumes = [c['volume'] for c in lookback_candles if c['volume'] > 0]
+
+    if not volumes:
         return None
 
-    # 현재가 위치
+    # 거래량 임계값 설정 (상위 5%)
+    volume_threshold = np.percentile(volumes, 95)
+
+    anchor_candle = None
+    anchor_candle_index = -1
+
+    # 가장 최근의 기준 캔들을 찾음 (뒤에서부터)
+    for i in range(len(lookback_candles) - 1, -1, -1):
+        c = lookback_candles[i]
+        if c['open'] == 0: continue
+        body_size = abs(c['close'] - c['open'])
+        body_pct = body_size / c['open']
+
+        # 조건: 장대양봉(상승) + 거래량 임계값 초과 + 몸통크기 10% 이상
+        if c['close'] > c['open'] and c['volume'] > volume_threshold and body_pct >= 0.10:
+            anchor_candle = c
+            anchor_candle_index = i
+            break
+    
+    if not anchor_candle:
+        return None
+
+    # 2. 기준 캔들의 시가/종가를 후보로 지지/저항 점수 계산
+    candidate_levels = {
+        'open': anchor_candle['open'],
+        'close': anchor_candle['close']
+    }
+    
+    # 기준 캔들 이전의 100개 캔들로 점수 계산
+    history_candles = lookback_candles[max(0, anchor_candle_index - 100) : anchor_candle_index]
+    if len(history_candles) < 20: # 최소 20개는 있어야 의미있음
+        return None
+
+    scores = {'open': 0, 'close': 0}
+
+    for name, level in candidate_levels.items():
+        # 가격대에 따른 허용 오차 (0.3%)
+        tolerance = level * 0.003
+        for c in history_candles:
+            # 캔들(고가~저가)이 레벨의 오차범위 내에 닿으면 점수 부여
+            if c['low'] <= level + tolerance and c['high'] >= level - tolerance:
+                scores[name] += 1
+    
+    # 3. 가장 점수가 높은 가격대를 '키 레벨'로 설정
+    # 점수가 3번 미만으로 나온 레벨은 신뢰도 낮음
+    if max(scores.values()) < 3:
+        return None
+
+    best_level_name = max(scores, key=scores.get)
+    key_level = candidate_levels[best_level_name]
+
+    # 4. 키 레벨 중심으로 박스권 형성
+    # 최근 20개 캔들의 평균 변동폭(고가-저가)을 박스 높이로 활용
+    recent_ranges = [c['high'] - c['low'] for c in candles[-20:] if c['low'] > 0]
+    if not recent_ranges: return None
+    avg_range = sum(recent_ranges) / len(recent_ranges)
+
+    box_top = key_level + (avg_range / 2)
+    box_bottom = key_level - (avg_range / 2)
+
+    # 현재가 위치 계산
     current_price = candles[-1]['close']
+    position = 'middle'
+    position_percent = 50
 
-    # 위치 계산
-    if current_price > top * 1.03:
-        position = 'breakout'
-    elif current_price < bottom * 0.97:
-        position = 'below'
-    else:
-        position_pct = (current_price - bottom) / (top - bottom) * 100
-        if position_pct >= 66:
+    if box_top > box_bottom:
+        position_percent = (current_price - box_bottom) / (box_top - box_bottom) * 100
+        if current_price > box_top * 1.005: # 0.5% 이상 돌파
+            position = 'breakout'
+        elif current_price < box_bottom * 0.995: # 0.5% 이상 이탈
+            position = 'below'
+        elif position_percent >= 70:
             position = 'top'
-        elif position_pct >= 33:
-            position = 'middle'
-        else:
+        elif position_percent <= 30:
             position = 'bottom'
 
     return {
         'hasBox': True,
-        'top': top,
-        'bottom': bottom,
+        'top': box_top,
+        'bottom': box_bottom,
         'position': position,
-        'positionPercent': (current_price - bottom) / (top - bottom) * 100 if top != bottom else 50
+        'positionPercent': position_percent,
+        'keyLevel': key_level
     }
 
 def calculate_ma50(candles: List[Dict]) -> Optional[float]:
@@ -256,22 +318,40 @@ def check_pullback_signal(current_price: float, ma110: Optional[float], ma50: Op
         return 'SUPPORT_180'
     return None
 
-def calculate_ma_slope(candles: List[Dict], period: int, lookback: int = 5) -> Optional[float]:
-    """MA 기울기 계산 (최근 lookback개 MA 값의 평균 변화율)"""
-    if len(candles) < period + lookback:
+def calculate_ma_slope(candles: List[Dict], period: int, lookback: int = 10, offset: int = 0) -> Optional[float]:
+    """MA 기울기 계산 (offset으로부터 lookback 기간 동안의 전체 변화율)"""
+    # 필요한 최소 캔들 수: MA 기간 + 기울기 계산 기간 + 오프셋
+    if len(candles) < period + lookback + offset:
         return None
 
-    slopes = []
-    for i in range(lookback):
-        idx = -(i + 1)
-        ma_current = calculate_ma_from_slice(candles[:idx], period) if idx < -1 else calculate_ma_from_slice(candles, period)
-        ma_prev = calculate_ma_from_slice(candles[:idx - 1], period)
+    # 기울기 시작점의 MA 계산
+    start_ma_end_idx = len(candles) - (lookback + offset)
+    start_ma_start_idx = start_ma_end_idx - period
+    if start_ma_start_idx < 0:
+        return None
+    
+    start_chunk = candles[start_ma_start_idx:start_ma_end_idx]
+    if not start_chunk: return None
+    
+    start_ma = sum(c['close'] for c in start_chunk) / len(start_chunk)
 
-        if ma_current and ma_prev and ma_prev > 0:
-            slope = (ma_current - ma_prev) / ma_prev * 100
-            slopes.append(slope)
+    # 기울기 끝점의 MA 계산
+    end_ma_end_idx = len(candles) - offset
+    end_ma_start_idx = end_ma_end_idx - period
+    if end_ma_start_idx < 0:
+        return None
 
-    return sum(slopes) / len(slopes) if slopes else None
+    end_chunk = candles[end_ma_start_idx:end_ma_end_idx]
+    if not end_chunk: return None
+
+    end_ma = sum(c['close'] for c in end_chunk) / len(end_chunk)
+
+    if start_ma == 0:
+        return None
+
+    # 시작 MA 대비 끝 MA의 변화율을 기울기로 반환
+    slope = (end_ma - start_ma) / start_ma * 100
+    return slope
 
 def calculate_ma_from_slice(candles: List[Dict], period: int) -> Optional[float]:
     """슬라이스에서 MA 계산"""
@@ -281,128 +361,122 @@ def calculate_ma_from_slice(candles: List[Dict], period: int) -> Optional[float]
     closes = [c['close'] for c in recent]
     return sum(closes) / period
 
-def check_swing_recovery(candles: List[Dict], current_price: float, ma50_1h: Optional[float]) -> Optional[Dict]:
-    """스윙 리커버리 확인 (하락 → 횡보 → MA50 위)"""
-    if not ma50_1h or current_price <= ma50_1h:
-        return None
 
-    slope_old = calculate_ma_slope(candles, 50, lookback=10)  # 10봉 전 기울기
-    slope_recent = calculate_ma_slope(candles, 50, lookback=5)  # 최근 5봉 기울기
 
-    if slope_old and slope_recent:
-        # 과거 하락 추세 → 현재 횡보/상승
-        if slope_old < -0.5 and slope_recent > -0.3:
-            return {
-                'slopeOld': round(slope_old, 2),
-                'slopeRecent': round(slope_recent, 2),
-                'ma50Current': ma50_1h
-            }
+def calculate_position_in_box(current_price: float, box: Dict) -> Dict:
+    """박스권 내에서 현재 가격의 위치를 계산"""
+    box_top = box['top']
+    box_bottom = box['bottom']
+    
+    position = 'middle'
+    position_percent = 50
 
-    return None
+    if box_top > box_bottom:
+        position_percent = (current_price - box_bottom) / (box_top - box_bottom) * 100
+        if current_price > box_top * 1.005: # 0.5% 이상 돌파
+            position = 'breakout'
+        elif current_price < box_bottom * 0.995: # 0.5% 이상 이탈
+            position = 'below'
+        elif position_percent >= 70:
+            position = 'top'
+        elif position_percent <= 30:
+            position = 'bottom'
+    
+    result_box = box.copy()
+    result_box['position'] = position
+    result_box['positionPercent'] = position_percent
+    return result_box
+
 
 def analyze_symbol(symbol: str, exchange: str) -> Optional[Dict]:
-    """단일 심볼 분석"""
+    """단일 심볼 분석 (하락 후 횡보 필터링 및 마스터 박스권 적용)"""
     try:
         print(f"Analyzing {exchange.upper()}: {symbol}", file=sys.stderr)
 
         # 차트 데이터 수집
         timeframes = ['5m', '30m', '1h', '4h', '1d']
         candles_data = {}
-
         for tf in timeframes:
+            count = 200
+            if tf in ['1h', '4h', '1d']:
+                count = 250 # 박스권 분석을 위해 더 많은 캔들 확보
+            
             if exchange == 'upbit':
                 market = f'KRW-{symbol}'
-                candles_data[tf] = fetch_upbit_candles(market, tf)
+                candles_data[tf] = fetch_upbit_candles(market, tf, count=count)
                 time.sleep(UPBIT_DELAY)
-            else:  # bithumb
+            else:
                 candles_data[tf] = fetch_bithumb_candles(symbol, tf)
                 time.sleep(BITHUMB_DELAY)
 
-        # 현재가 가져오기
+        # 1. 하락 후 횡보 패턴 확인 (1시간봉 MA50 기준)
         candles_1h = candles_data.get('1h', [])
-        if not candles_1h:
+        if len(candles_1h) < 70:
             return None
 
-        current_price = candles_1h[-1]['close']
-        volume = candles_1h[-1]['volume']
+        past_slope = calculate_ma_slope(candles_1h, period=50, lookback=10, offset=10)
+        recent_slope = calculate_ma_slope(candles_1h, period=50, lookback=10, offset=0)
 
-        # 각 타임프레임 분석
-        tf_results = {}
-        box_count = 0
+        if past_slope is None or recent_slope is None:
+            return None
+            
+        is_downtrend_then_sideways = past_slope < -4.0 and abs(recent_slope) < 2.0
+        
+        if not is_downtrend_then_sideways:
+            return None
 
-        for tf in timeframes:
+        # 2. 마스터 박스권 탐지 (4h -> 1h 순으로)
+        master_box = None
+        master_box_tf = None
+        for tf in ['4h', '1h', '1d']:
             candles = candles_data.get(tf, [])
             if candles:
-                box = detect_box_range(candles)
-                if box and box['hasBox']:
-                    tf_results[tf] = box
-                    box_count += 1
-                else:
-                    tf_results[tf] = {'hasBox': False}
+                box = detect_box_range(candles, tf)
+                if box and box.get('hasBox'):
+                    master_box = box
+                    master_box_tf = tf
+                    break 
+        
+        if not master_box:
+            return None
+
+        # 3. 모든 타임프레임에 마스터 박스권 적용 및 현재가 위치 계산
+        tf_results = {}
+        for tf in timeframes:
+            candles = candles_data.get(tf, [])
+            if candles and candles[-1]['close'] > 0:
+                current_price = candles[-1]['close']
+                box_with_position = calculate_position_in_box(current_price, master_box)
+                tf_results[tf] = box_with_position
             else:
                 tf_results[tf] = {'hasBox': False}
 
-        # 박스권이 없으면 스킵
-        if box_count == 0:
-            return None
-
-        # MA50 체크
-        ma50_1h = calculate_ma50(candles_1h)
+        # 최종 결과 구성
+        final_1h_candles = candles_data.get('1h', [])
+        current_price = final_1h_candles[-1]['close']
+        volume = final_1h_candles[-1]['volume']
+        ma50_1h = calculate_ma50(final_1h_candles)
         above_1h_ma50 = current_price > ma50_1h if ma50_1h else False
-
-        ma50_5m = calculate_ma50(candles_data.get('5m', []))
-        above_5m_ma50 = current_price > ma50_5m if ma50_5m else False
-
-        # 일목구름 체크
-        cloud_5m = calculate_ichimoku_cloud(candles_data.get('5m', []))
-        cloud_30m = calculate_ichimoku_cloud(candles_data.get('30m', []))
-        cloud_1h = calculate_ichimoku_cloud(candles_1h)
-        cloud_4h = calculate_ichimoku_cloud(candles_data.get('4h', []))
-
-        cloud_status_5m = check_cloud_status(current_price, cloud_5m)
-        cloud_status_30m = check_cloud_status(current_price, cloud_30m)
-        cloud_status_1h = check_cloud_status(current_price, cloud_1h)
-        cloud_status_4h = check_cloud_status(current_price, cloud_4h)
-
-        # 기준봉 & 눌림목
-        candles_1d = candles_data.get('1d', [])
-        is_triggered = detect_trigger_candle(candles_1d) if candles_1d else False
-
-        ma110 = calculate_ma110(candles_1d) if candles_1d else None
-        ma180 = calculate_ma180(candles_1d) if candles_1d else None
-        pullback_signal = check_pullback_signal(current_price, ma110, ma50_1h, ma180) if is_triggered else None
-
-        # 스윙 리커버리
-        swing_recovery = check_swing_recovery(candles_1h, current_price, ma50_1h)
-
+        
         result = {
             'symbol': symbol,
             'exchange': exchange,
             'volume': volume,
             'currentPrice': current_price,
             'timeframes': tf_results,
-            'boxCount': box_count,
-            'allTimeframes': box_count == 5,
+            'boxCount': 5,
             'above1hMA50': above_1h_ma50,
-            'above5mMA50': above_5m_ma50,
+            'trendInfo': {
+                'pastSlope': round(past_slope, 2),
+                'recentSlope': round(recent_slope, 2),
+            },
+            'masterBoxInfo': {
+                't': master_box['top'],
+                'b': master_box['bottom'],
+                'kl': master_box.get('keyLevel'),
+                'tf': master_box_tf
+            }
         }
-
-        # 조건부 필드 추가
-        if cloud_status_5m:
-            result['cloudStatus5m'] = cloud_status_5m
-        if cloud_status_30m:
-            result['cloudStatus30m'] = cloud_status_30m
-        if cloud_status_1h:
-            result['cloudStatus'] = cloud_status_1h
-        if cloud_status_4h:
-            result['cloudStatus4h'] = cloud_status_4h
-        if is_triggered:
-            result['isTriggered'] = True
-        if pullback_signal:
-            result['pullbackSignal'] = pullback_signal
-        if swing_recovery:
-            result['swingRecovery'] = swing_recovery
-
         return result
 
     except Exception as e:

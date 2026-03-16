@@ -286,7 +286,7 @@ export default function DivergencePage() {
     }
   };
 
-  const canAccess = trialStatus.status === 'active' || trialStatus.status === 'premium';
+  const canAccess = true;
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
