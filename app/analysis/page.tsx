@@ -277,6 +277,15 @@ export default function AnalysisPage() {
   // MA180 라이딩: 현재가가 일봉 MA180 바로 위(0~5%)이고 MA180 기울기 양수
   const sectionMA180 = byChangeRate(filteredResults.filter(r => r.ridingMA180));
 
+  // ─ 박스권 상단/돌파 섹션 ──────────────────────────────────────────────────
+  const TF_ORDER = ['1d', '4h', '1h', '30m', '5m'] as const;
+  const isBoxAlert = (r: MultiTimeframeResult, tf: '1h' | '4h') => {
+    const p = r.timeframes?.[tf]?.position;
+    return p === 'top' || p === 'breakout';
+  };
+  const sectionBox4h = byChangeRate(filteredResults.filter(r => isBoxAlert(r, '4h')));
+  const sectionBox1h = byChangeRate(filteredResults.filter(r => isBoxAlert(r, '1h')));
+
   // ─ 1시간봉 MA 라이딩 섹션 ──────────────────────────────────────────────────
   const section1hMA50    = byChangeRate(filteredResults.filter(r => r.riding1hMA50));
   const section1hMA110   = byChangeRate(filteredResults.filter(r => r.riding1hMA110));
@@ -413,6 +422,24 @@ export default function AnalysisPage() {
             {/* 2x2 Section Grid */}
             {results.totalAnalyzed > 0 && (() => {
               // 공통 코인 행 컴포넌트
+              // 박스권 상단/돌파 마커: 각 타임프레임에서 top/breakout인 경우 배지 표시
+              const BOX_TF_LABELS: Record<string, string> = {
+                '5m': '5분', '30m': '30분', '1h': '1H', '4h': '4H', '1d': '일',
+              };
+              const getBoxAlertBadges = (result: MultiTimeframeResult) => {
+                if (!result.timeframes) return [];
+                return (['5m', '30m', '1h', '4h', '1d'] as const)
+                  .filter(tf => {
+                    const box = result.timeframes?.[tf];
+                    return box?.hasBox && (box.position === 'top' || box.position === 'breakout');
+                  })
+                  .map(tf => ({
+                    tf,
+                    label: BOX_TF_LABELS[tf],
+                    isBreakout: result.timeframes?.[tf]?.position === 'breakout',
+                  }));
+              };
+
               const CoinRow = ({ result, maValue, maLabel }: {
                 result: MultiTimeframeResult;
                 maValue?: number;
@@ -422,6 +449,7 @@ export default function AnalysisPage() {
                 const distPct = maValue && maValue > 0
                   ? ((result.currentPrice - maValue) / maValue * 100).toFixed(1)
                   : null;
+                const boxBadges = getBoxAlertBadges(result);
                 return (
                   <div
                     onClick={() => setSelectedCoin(result)}
@@ -439,6 +467,24 @@ export default function AnalysisPage() {
                       </div>
                       <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
                     </div>
+                    {/* 박스권 상단/돌파 마커 */}
+                    {boxBadges.length > 0 && (
+                      <div className="hidden sm:flex items-center gap-0.5 shrink-0">
+                        {boxBadges.map(({ tf, label, isBreakout }) => (
+                          <span
+                            key={tf}
+                            title={isBreakout ? `${label} 박스권 돌파` : `${label} 박스권 상단`}
+                            className={`text-[8px] font-bold px-1 py-0.5 rounded leading-none border ${
+                              isBreakout
+                                ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                                : 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                            }`}
+                          >
+                            {label}{isBreakout ? '↑' : '▲'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {/* MA까지 거리 */}
                     {distPct !== null && (
                       <div className="hidden sm:block text-[9px] text-zinc-500 shrink-0">
@@ -492,8 +538,93 @@ export default function AnalysisPage() {
                 </div>
               );
 
+              // 박스권 상단 섹션 전용 row — 해당 타임프레임 위치 배지 표시
+              const BoxTopRow = ({ result, tf }: { result: MultiTimeframeResult; tf: '1h' | '4h' }) => {
+                const cr = result.changeRate ?? 0;
+                const box = result.timeframes?.[tf];
+                const isBreakout = box?.position === 'breakout';
+                const pct = box?.positionPercent;
+                const activeTfs = [tf];
+                return (
+                  <div
+                    onClick={() => setSelectedCoin(result)}
+                    className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-bold text-yellow-500">{result.symbol.slice(0, 2)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-xs font-bold text-white truncate">{result.symbol}</span>
+                        {isBinanceAlpha(result.symbol) && (
+                          <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
+                        )}
+                      </div>
+                      <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
+                    </div>
+                    {/* 박스 위치 배지 */}
+                    <span
+                      title={`${BOX_TF_LABELS[tf]} ${isBreakout ? '돌파' : `상단 ${pct != null ? pct.toFixed(0) + '%' : ''}`}`}
+                      className={`text-[8px] font-bold px-1 py-0.5 rounded leading-none border shrink-0 ${
+                        isBreakout
+                          ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                          : 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                      }`}
+                    >
+                      {isBreakout ? '돌파↑' : `상단 ${pct != null ? pct.toFixed(0) + '%' : '▲'}`}
+                    </span>
+                    <div className={`text-[10px] font-bold shrink-0 ${cr >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {cr >= 0 ? '+' : ''}{cr.toFixed(1)}%
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono shrink-0">
+                      ₩{formatNumber(result.currentPrice)}
+                    </div>
+                  </div>
+                );
+              };
+
               return (
                 <div className="space-y-6">
+                  {/* 박스권 상단/돌파 섹션 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">박스권</span>
+                      <span className="text-[10px] text-zinc-500">상단(▲) · 돌파(↑)</span>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {/* 4시간봉 */}
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="px-3 py-2 border-b border-zinc-800 border-b-orange-500/30 rounded-t-lg flex items-center gap-2">
+                          <span className="text-sm">🎯</span>
+                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1">4시간봉 박스권 상단 / 돌파</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{sectionBox4h.length}</span>
+                        </div>
+                        <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                          {sectionBox4h.length > 0 ? (
+                            sectionBox4h.map(r => <BoxTopRow key={`${r.exchange}-${r.symbol}`} result={r} tf="4h" />)
+                          ) : (
+                            <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
+                          )}
+                        </div>
+                      </div>
+                      {/* 1시간봉 */}
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="px-3 py-2 border-b border-zinc-800 border-b-yellow-500/30 rounded-t-lg flex items-center gap-2">
+                          <span className="text-sm">⏱</span>
+                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1">1시간봉 박스권 상단 / 돌파</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{sectionBox1h.length}</span>
+                        </div>
+                        <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                          {sectionBox1h.length > 0 ? (
+                            sectionBox1h.map(r => <BoxTopRow key={`${r.exchange}-${r.symbol}`} result={r} tf="1h" />)
+                          ) : (
+                            <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* 일봉 MA 라이딩 */}
                   <div>
                     <div className="flex items-center gap-2 mb-2">

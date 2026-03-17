@@ -5,7 +5,7 @@ import Header from '../components/Header';
 
 interface FundingData {
   symbol: string;
-  exchange: 'binance' | 'bybit' | 'okx';
+  exchange: 'binance' | 'bybit' | 'okx' | 'bitget';
   fundingRate: number;
   fundingRatePercent: number;
   nextFundingTime: number;
@@ -18,7 +18,7 @@ interface FundingResponse {
   count: number;
 }
 
-type ExchangeFilter = 'all' | 'binance' | 'bybit' | 'okx';
+type ExchangeFilter = 'all' | 'binance' | 'bybit' | 'okx' | 'bitget';
 type SortType = 'highest' | 'lowest' | 'positive' | 'negative';
 
 
@@ -71,6 +71,7 @@ export default function FundingPage() {
       case 'binance': return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
       case 'bybit': return 'bg-orange-500/20 text-orange-500 border-orange-500/30';
       case 'okx': return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
+      case 'bitget': return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
       default: return 'bg-zinc-500/20 text-zinc-500 border-zinc-500/30';
     }
   };
@@ -80,6 +81,7 @@ export default function FundingPage() {
       case 'binance': return 'Binance';
       case 'bybit': return 'Bybit';
       case 'okx': return 'OKX';
+      case 'bitget': return 'Bitget';
       default: return exchange;
     }
   };
@@ -207,7 +209,7 @@ export default function FundingPage() {
             실시간 펀딩비 (Funding Rate)
           </h1>
           <p className="text-xs sm:text-sm text-zinc-400">
-            Binance, Bybit의 실시간 선물 펀딩비를 확인하세요
+            Binance, Bybit, OKX, Bitget 실시간 선물 펀딩비
           </p>
         </div>
 
@@ -237,21 +239,33 @@ export default function FundingPage() {
 
         {/* Stats */}
         {fundingData && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
-              <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">총 종목</div>
-              <div className="text-base sm:text-xl font-bold text-white">{fundingData.count}</div>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-2 sm:p-4">
+              <div className="text-[9px] sm:text-xs text-zinc-500 mb-1">총 종목</div>
+              <div className="text-sm sm:text-xl font-bold text-white">{fundingData.count}</div>
             </div>
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
-              <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">Binance</div>
-              <div className="text-base sm:text-xl font-bold text-yellow-500">
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-2 sm:p-4">
+              <div className="text-[9px] sm:text-xs text-zinc-500 mb-1">Binance</div>
+              <div className="text-sm sm:text-xl font-bold text-yellow-500">
                 {fundingData.data.filter(d => d.exchange === 'binance').length}
               </div>
             </div>
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-3 sm:p-4">
-              <div className="text-[10px] sm:text-xs text-zinc-500 mb-1">Bybit</div>
-              <div className="text-base sm:text-xl font-bold text-orange-500">
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-2 sm:p-4">
+              <div className="text-[9px] sm:text-xs text-zinc-500 mb-1">Bybit</div>
+              <div className="text-sm sm:text-xl font-bold text-orange-500">
                 {fundingData.data.filter(d => d.exchange === 'bybit').length}
+              </div>
+            </div>
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-2 sm:p-4">
+              <div className="text-[9px] sm:text-xs text-zinc-500 mb-1">OKX</div>
+              <div className="text-sm sm:text-xl font-bold text-blue-400">
+                {fundingData.data.filter(d => d.exchange === 'okx').length}
+              </div>
+            </div>
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-2 sm:p-4">
+              <div className="text-[9px] sm:text-xs text-zinc-500 mb-1">Bitget</div>
+              <div className="text-sm sm:text-xl font-bold text-cyan-400">
+                {fundingData.data.filter(d => d.exchange === 'bitget').length}
               </div>
             </div>
           </div>
@@ -272,7 +286,7 @@ export default function FundingPage() {
 
           {/* Exchange Filter */}
           <div className="flex gap-2 mb-3 sm:mb-4 overflow-x-auto scrollbar-hide">
-            {(['all', 'binance', 'bybit'] as ExchangeFilter[]).map((exchange) => (
+            {(['all', 'binance', 'bybit', 'okx', 'bitget'] as ExchangeFilter[]).map((exchange) => (
               <button
                 key={exchange}
                 onClick={() => setExchangeFilter(exchange)}

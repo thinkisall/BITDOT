@@ -118,25 +118,99 @@ async function fetchBithumbMarkets() {
 
 // ── 기술적 분석 함수들 ─────────────────────────────────────────────────────
 
+// 가격 배열을 tolerance 범위로 클러스터링 → 많이 겹치는 구간 추출
+function clusterPriceLevels(prices, tolerance = 0.015) {
+  const sorted = [...prices].sort((a, b) => a - b);
+  const clusters = [];
+
+  for (const price of sorted) {
+    let merged = false;
+    for (const cluster of clusters) {
+      if (Math.abs(price - cluster.center) / cluster.center <= tolerance) {
+        cluster.prices.push(price);
+        cluster.center = cluster.prices.reduce((s, p) => s + p, 0) / cluster.prices.length;
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) clusters.push({ center: price, prices: [price] });
+  }
+
+  return clusters
+    .map(c => ({ center: c.center, count: c.prices.length }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// 클러스터 목록에서 박스 상단/하단 한 쌍 선택
+// - 최소 스프레드 2%, 최대 30%
+// - 상위 터치 클러스터들 중 (center 기준 높은 쪽 / 낮은 쪽) 조합 중 터치 합산 최대인 쌍
+function pickBoxLevels(clusters, minSpread = 0.02, maxSpread = 0.30) {
+  // count >= 2 이거나 전체 후보가 부족하면 count 1도 포함
+  let candidates = clusters.filter(c => c.count >= 2);
+  if (candidates.length < 2) candidates = clusters;
+  if (candidates.length < 2) return null;
+
+  // 상위 10개 후보만 검사
+  const pool = candidates.slice(0, 10);
+
+  let best = null;
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) {
+      const hi = pool[i].center > pool[j].center ? pool[i] : pool[j];
+      const lo = pool[i].center > pool[j].center ? pool[j] : pool[i];
+      const spread = (hi.center - lo.center) / lo.center;
+      if (spread < minSpread || spread > maxSpread) continue;
+      const score = hi.count + lo.count;
+      if (!best || score > best.score) best = { top: hi.center, bottom: lo.center, score };
+    }
+  }
+  return best;
+}
+
+// 장대양봉 탐지: 몸통 비율 >= threshold (기본 3%)
+function findBigBullishCandles(candles, threshold = 0.03) {
+  return candles.filter(c => {
+    const body = c.close - c.open;
+    return body > 0 && body / c.open >= threshold;
+  });
+}
+
 function detectBoxRange(candles) {
   if (candles.length < 20) return null;
-  const recent = candles.slice(-20);
 
-  // 스파이크 캔들 윗꼬리/아랫꼬리로 인한 상단 과대평가 방지
-  // 90번째 퍼센타일 고가, 10번째 퍼센타일 저가 사용
-  const highs  = recent.map((c) => c.high).sort((a, b) => a - b);
-  const lows   = recent.map((c) => c.low).sort((a, b) => a - b);
-  const top    = highs[Math.floor(highs.length * 0.9)];  // 상위 10% 제외
-  const bottom = lows[Math.floor(lows.length * 0.1)];    // 하위 10% 제외
+  const lookback = Math.min(150, candles.length);
+  const recent   = candles.slice(-lookback);
 
-  if (!top || !bottom || bottom === 0) return null;
-  const boxRange = ((top - bottom) / bottom) * 100;
-  if (boxRange > 30) return null;
+  // 1. 최근 50캔들에서 장대양봉 탐색
+  const searchWindow = recent.slice(-50);
+  const bigCandles   = findBigBullishCandles(searchWindow);
+
+  let priceSamples;
+
+  if (bigCandles.length > 0) {
+    // 가장 최근 장대양봉의 위치를 recent 기준으로 찾아서, 그 이전(왼쪽) 캔들의 시/종가 수집
+    const latestBig  = bigCandles[bigCandles.length - 1];
+    const bigIdx     = recent.findLastIndex(c => c.time === latestBig.time);
+    const leftCandles = bigIdx > 0 ? recent.slice(0, bigIdx + 1) : recent;
+    priceSamples = leftCandles.flatMap(c => [c.open, c.close]);
+  } else {
+    // 장대 없음: 전체 구간 시/종가로 횡보 구간 탐색
+    priceSamples = recent.flatMap(c => [c.open, c.close]);
+  }
+
+  if (priceSamples.length < 4) return null;
+
+  const clusters = clusterPriceLevels(priceSamples);
+  const levels   = pickBoxLevels(clusters);
+  if (!levels) return null;
+
+  const { top, bottom } = levels;
+  if (bottom === 0) return null;
 
   const currentPrice = candles[candles.length - 1].close;
   let position;
-  if      (currentPrice > top * 1.03)       position = 'breakout';
-  else if (currentPrice < bottom * 0.97)    position = 'below';
+  if      (currentPrice > top * 1.03)    position = 'breakout';
+  else if (currentPrice < bottom * 0.97) position = 'below';
   else {
     const pct = ((currentPrice - bottom) / (top - bottom)) * 100;
     if      (pct >= 66) position = 'top';
@@ -369,14 +443,12 @@ async function analyzeSymbol(item) {
 async function performAnalysis() {
   try {
     console.log('[Multi-TF] 마켓 목록 로드 중...');
-    // 24h 상승률 상위 100종목만 분석
     const allMarkets = (await fetchBithumbMarkets())
-      .sort((a, b) => b.changeRate - a.changeRate)
-      .slice(0, 100);
+      .sort((a, b) => b.changeRate - a.changeRate);
 
-    console.log(`[Multi-TF] 분석 시작: 상승률 상위 ${allMarkets.length}종목`);
+    console.log(`[Multi-TF] 분석 시작: 전체 ${allMarkets.length}종목`);
 
-    const limit = createConcurrencyLimiter(5);
+    const limit = createConcurrencyLimiter(15);
     let done = 0;
 
     const results = (
