@@ -111,9 +111,9 @@ async function fetchBithumbMarkets() {
       symbol: sym,
       market: sym,
       volume: Number(t.acc_trade_value_24H || 0),
+      changeRate: parseFloat(t.fluctate_rate_24H || '0'),
       exchange: 'bithumb',
-    }))
-    .sort((a, b) => b.volume - a.volume);
+    }));
 }
 
 // ── 기술적 분석 함수들 ─────────────────────────────────────────────────────
@@ -207,6 +207,34 @@ function calculateMASlope(candles, period, lookback = 5) {
   return slopes.length > 0 ? slopes.reduce((a, b) => a + b, 0) / slopes.length : null;
 }
 
+// ── VWMA (거래량 가중 이동평균) ────────────────────────────────────────────
+function calculateVWMA(candles, period) {
+  if (candles.length < period) return null;
+  const slice = candles.slice(-period);
+  const sumPV = slice.reduce((s, c) => s + c.close * c.volume, 0);
+  const sumV  = slice.reduce((s, c) => s + c.volume, 0);
+  return sumV > 0 ? sumPV / sumV : null;
+}
+
+function calculateVWMASlope(candles, period, lookback = 5) {
+  if (candles.length < period + lookback) return null;
+  const slopes = [];
+  for (let i = 0; i < lookback; i++) {
+    const cur  = calculateVWMA(candles.slice(0, candles.length - i),     period);
+    const prev = calculateVWMA(candles.slice(0, candles.length - i - 1), period);
+    if (cur && prev && prev > 0) slopes.push(((cur - prev) / prev) * 100);
+  }
+  return slopes.length > 0 ? slopes.reduce((a, b) => a + b, 0) / slopes.length : null;
+}
+
+// ── MA 라이딩 판별 ──────────────────────────────────────────────────────────
+// 현재가가 MA 바로 위(0~maxAbovePct%)에 있고 MA 기울기가 양수이면 "MA를 따라 올라가는 중"
+function checkMARiding(price, maValue, slope, maxAbovePct = 0.05) {
+  if (!maValue || slope === null || slope === undefined) return false;
+  const distPct = (price - maValue) / maValue;
+  return distPct >= 0 && distPct <= maxAbovePct && slope > 0;
+}
+
 function checkSwingRecovery(candles, price, ma50) {
   if (!ma50 || price <= ma50) return null;
   const slopeOld    = calculateMASlope(candles, 50, 10);
@@ -249,15 +277,28 @@ async function analyzeSymbol(item) {
       if (box) { tfResults[tf] = box; boxCount++; }
       else      { tfResults[tf] = { hasBox: false }; }
     }
-    if (boxCount === 0) return null;
 
     // MA 계산
-    const ma50_1h  = calculateMA(candles1h, 50);
-    const ma50_5m  = calculateMA(candlesMap['5m'] || [], 50);
-    const candles1d = candlesMap['1d'] || [];
-    const ma50_1d  = calculateMA(candles1d, 50);
-    const ma110    = calculateMA(candles1d, 110);
-    const ma180    = calculateMA(candles1d, 180);
+    const ma50_1h    = calculateMA(candles1h, 50);
+    const ma110_1h   = calculateMA(candles1h, 110);
+    const ma180_1h   = calculateMA(candles1h, 180);
+    const vwma110_1h = calculateVWMA(candles1h, 110);
+    const ma50_5m    = calculateMA(candlesMap['5m'] || [], 50);
+    const candles1d  = candlesMap['1d'] || [];
+    const ma50_1d    = calculateMA(candles1d, 50);
+    const ma110      = calculateMA(candles1d, 110);
+    const ma180      = calculateMA(candles1d, 180);
+    const vwma110    = calculateVWMA(candles1d, 110);
+
+    // MA 기울기 (라이딩 판별용)
+    const slope5mMA50    = calculateMASlope(candlesMap['5m'] || [], 50, 5);
+    const slope1hMA50    = calculateMASlope(candles1h, 50, 5);
+    const slope1hMA110   = calculateMASlope(candles1h, 110, 5);
+    const slope1hMA180   = calculateMASlope(candles1h, 180, 5);
+    const slope1hVWMA110 = calculateVWMASlope(candles1h, 110, 5);
+    const slopeMA110     = calculateMASlope(candles1d, 110, 5);
+    const slopeVWMA110   = calculateVWMASlope(candles1d, 110, 5);
+    const slopeMA180     = calculateMASlope(candles1d, 180, 5);
 
     // 일목구름
     const clouds = {
@@ -277,11 +318,34 @@ async function analyzeSymbol(item) {
       exchange:      item.exchange,
       volume,
       currentPrice,
+      changeRate:    item.changeRate ?? 0,
       timeframes:    tfResults,
       boxCount,
       allTimeframes: boxCount === 5,
       above1hMA50:   ma50_1h ? currentPrice > ma50_1h : false,
       above5mMA50:   ma50_5m ? currentPrice > ma50_5m : false,
+      // MA 현재값 (5m)
+      ...(ma50_5m    ? { ma50_5m }    : {}),
+      // MA 현재값 (1h)
+      ...(ma50_1h    ? { ma50_1h }    : {}),
+      ...(ma110_1h   ? { ma110_1h }   : {}),
+      ...(ma180_1h   ? { ma180_1h }   : {}),
+      ...(vwma110_1h ? { vwma110_1h } : {}),
+      // MA 현재값 (1d)
+      ...(ma110    ? { ma110 }    : {}),
+      ...(vwma110  ? { vwma110 }  : {}),
+      ...(ma180    ? { ma180 }    : {}),
+      // MA 라이딩 플래그 — 5분봉
+      riding5mMA50:    checkMARiding(currentPrice, ma50_5m,    slope5mMA50),
+      // MA 라이딩 플래그 — 1시간봉
+      riding1hMA50:    checkMARiding(currentPrice, ma50_1h,    slope1hMA50),
+      riding1hMA110:   checkMARiding(currentPrice, ma110_1h,   slope1hMA110),
+      riding1hMA180:   checkMARiding(currentPrice, ma180_1h,   slope1hMA180),
+      riding1hVWMA110: checkMARiding(currentPrice, vwma110_1h, slope1hVWMA110),
+      // MA 라이딩 플래그 — 일봉
+      ridingMA110:   checkMARiding(currentPrice, ma110,    slopeMA110),
+      ridingVWMA110: checkMARiding(currentPrice, vwma110,  slopeVWMA110),
+      ridingMA180:   checkMARiding(currentPrice, ma180,    slopeMA180),
     };
 
     const cs = {
@@ -305,9 +369,12 @@ async function analyzeSymbol(item) {
 async function performAnalysis() {
   try {
     console.log('[Multi-TF] 마켓 목록 로드 중...');
-    const allMarkets = await fetchBithumbMarkets();
+    // 24h 상승률 상위 100종목만 분석
+    const allMarkets = (await fetchBithumbMarkets())
+      .sort((a, b) => b.changeRate - a.changeRate)
+      .slice(0, 100);
 
-    console.log(`[Multi-TF] 분석 시작: ${allMarkets.length}종목 (빗썸 전체)`);
+    console.log(`[Multi-TF] 분석 시작: 상승률 상위 ${allMarkets.length}종목`);
 
     const limit = createConcurrencyLimiter(5);
     let done = 0;
@@ -325,7 +392,7 @@ async function performAnalysis() {
       )
     ).filter(Boolean);
 
-    results.sort((a, b) => b.volume - a.volume);
+    results.sort((a, b) => b.changeRate - a.changeRate);
 
     cache = { results, totalAnalyzed: allMarkets.length, foundCount: results.length, lastUpdated: Date.now() };
     cacheTimestamp = Date.now();

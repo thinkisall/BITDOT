@@ -36,6 +36,7 @@ interface MultiTimeframeResult {
   exchange: 'upbit' | 'bithumb';
   volume: number;
   currentPrice: number;
+  changeRate: number;          // 24h 상승률 (%)
   timeframes: {
     '5m': TimeframeBoxInfo;
     '30m': TimeframeBoxInfo;
@@ -47,20 +48,36 @@ interface MultiTimeframeResult {
   allTimeframes: boolean;
   above1hMA50?: boolean;
   above5mMA50?: boolean;
+  // MA 현재값 (5m)
+  ma50_5m?: number;
+  // MA 현재값 (1h)
+  ma50_1h?: number;
+  ma110_1h?: number;
+  ma180_1h?: number;
+  vwma110_1h?: number;
+  // MA 현재값 (1d)
+  ma110?: number;
+  vwma110?: number;
+  ma180?: number;
+  // MA 라이딩 플래그 — 5분봉
+  riding5mMA50?: boolean;
+  // MA 라이딩 플래그 — 1시간봉
+  riding1hMA50?: boolean;
+  riding1hMA110?: boolean;
+  riding1hMA180?: boolean;
+  riding1hVWMA110?: boolean;
+  // MA 라이딩 플래그 — 일봉
+  ridingMA110?: boolean;
+  ridingVWMA110?: boolean;
+  ridingMA180?: boolean;
+  // 기존 호환
   cloudStatus5m?: 'above' | 'near';
   cloudStatus30m?: 'above' | 'near';
   cloudStatus?: 'above' | 'near';
   cloudStatus4h?: 'above' | 'near';
   volumeSpike?: VolumeSpike;
-  ma110?: number;
-  ma50?: number;
   isTriggered?: boolean;
   pullbackSignal?: 'TREND_110' | 'SUPPORT_50' | 'SUPPORT_180';
-  watchlist?: {
-    isUptrend: boolean;
-    slope: number;
-    ma50Current: number;
-  };
   swingRecovery?: {
     slopeOld: number;
     slopeRecent: number;
@@ -243,48 +260,28 @@ export default function AnalysisPage() {
     result.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
-  // ─ 섹션 필터 ─────────────────────────────────────────────────────────────
-  // 박스권 상단 타점 (top 또는 breakout 위치)
-  const byTopOrBreakout = (tf: '5m' | '30m' | '1h' | '4h') =>
-    filteredResults
-      .filter(r => {
-        const pos = r.timeframes[tf].position;
-        return r.timeframes[tf].hasBox && (pos === 'top' || pos === 'breakout');
-      })
-      .sort((a, b) => b.volume - a.volume);
+  // ─ 섹션 필터 (상승률 top 100 기준 MA 라이딩) ──────────────────────────────
+  // 공통 정렬: 상승률 높은 순
+  const byChangeRate = (arr: typeof filteredResults) =>
+    [...arr].sort((a, b) => (b.changeRate ?? 0) - (a.changeRate ?? 0));
 
-  const section5m  = byTopOrBreakout('5m');
-  const section30m = byTopOrBreakout('30m');
-  const section1h  = byTopOrBreakout('1h');
-  const section4h  = byTopOrBreakout('4h');
+  // 5분봉 MA50 라이딩: 현재가가 5m MA50 바로 위(0~5%)이고 MA50 기울기 양수
+  const section5mMA50 = byChangeRate(filteredResults.filter(r => r.riding5mMA50));
 
-  // 스윙 타점 — 1h MA50 위 + 5m MA50 위
-  const sectionSwing = filteredResults.filter(r =>
-    r.above1hMA50 === true && r.above5mMA50 === true
-  );
+  // MA110 라이딩: 현재가가 일봉 MA110 바로 위(0~5%)이고 MA110 기울기 양수
+  const sectionMA110 = byChangeRate(filteredResults.filter(r => r.ridingMA110));
 
-  // 스윙 리커버리 — 하락 추세(MA50 기울기 음수) → 횡보(기울기 0근처) → 현재가 1h MA50 위
-  const sectionSwingRecovery = filteredResults
-    .filter(r => r.swingRecovery !== undefined)
-    .sort((a, b) => b.volume - a.volume);
+  // VWMA110 라이딩: 현재가가 일봉 VWMA110 바로 위(0~5%)이고 VWMA110 기울기 양수
+  const sectionVWMA110 = byChangeRate(filteredResults.filter(r => r.ridingVWMA110));
 
-  // 구름 타점 — 5m · 30m · 1h · 4h 모두 구름 위
-  const sectionCloud = filteredResults.filter(r =>
-    r.cloudStatus5m  === 'above' &&
-    r.cloudStatus30m === 'above' &&
-    r.cloudStatus    === 'above' &&
-    r.cloudStatus4h  === 'above'
-  );
+  // MA180 라이딩: 현재가가 일봉 MA180 바로 위(0~5%)이고 MA180 기울기 양수
+  const sectionMA180 = byChangeRate(filteredResults.filter(r => r.ridingMA180));
 
-  // 기준봉 발생 — 최근 7일 내 기준봉 발생 종목 전체 (눌림목 여부 무관)
-  const sectionTriggered = filteredResults
-    .filter(r => r.isTriggered)
-    .sort((a, b) => b.volume - a.volume);
-
-  // 눌림목 타점 — 기준봉 발생 후 110/180일선 ±2% 이내
-  const sectionPullback = filteredResults
-    .filter(r => r.pullbackSignal)
-    .sort((a, b) => b.volume - a.volume);
+  // ─ 1시간봉 MA 라이딩 섹션 ──────────────────────────────────────────────────
+  const section1hMA50    = byChangeRate(filteredResults.filter(r => r.riding1hMA50));
+  const section1hMA110   = byChangeRate(filteredResults.filter(r => r.riding1hMA110));
+  const section1hMA180   = byChangeRate(filteredResults.filter(r => r.riding1hMA180));
+  const section1hVWMA110 = byChangeRate(filteredResults.filter(r => r.riding1hVWMA110));
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -416,47 +413,58 @@ export default function AnalysisPage() {
             {/* 2x2 Section Grid */}
             {results.totalAnalyzed > 0 && (() => {
               // 공통 코인 행 컴포넌트
-              const CoinRow = ({ result }: { result: MultiTimeframeResult }) => (
-                <div
-                  onClick={() => setSelectedCoin(result)}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
-                >
-                  <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-                    <span className="text-[9px] font-bold text-yellow-500">{result.symbol.slice(0, 2)}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-xs font-bold text-white truncate">{result.symbol}</span>
-                      {isBinanceAlpha(result.symbol) && (
-                        <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
-                      )}
+              const CoinRow = ({ result, maValue, maLabel }: {
+                result: MultiTimeframeResult;
+                maValue?: number;
+                maLabel?: string;
+              }) => {
+                const cr = result.changeRate ?? 0;
+                const distPct = maValue && maValue > 0
+                  ? ((result.currentPrice - maValue) / maValue * 100).toFixed(1)
+                  : null;
+                return (
+                  <div
+                    onClick={() => setSelectedCoin(result)}
+                    className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-bold text-yellow-500">{result.symbol.slice(0, 2)}</span>
                     </div>
-                    <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
-                  </div>
-                  {/* 타임프레임 배지: 모바일(좁은 카드)에서 숨김 */}
-                  <div className="hidden sm:flex gap-0.5 shrink-0">
-                    {(['5m', '30m', '1h', '4h', '1d'] as const).map(tf => (
-                      <div
-                        key={tf}
-                        className={`w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold ${getTimeframeColor(result.timeframes[tf])}`}
-                        title={result.timeframes[tf].hasBox ? getPositionLabel(result.timeframes[tf].position) : tf}
-                      >
-                        {getTimeframeIcon(result.timeframes[tf])}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-xs font-bold text-white truncate">{result.symbol}</span>
+                        {isBinanceAlpha(result.symbol) && (
+                          <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
+                        )}
                       </div>
-                    ))}
+                      <div className="text-[9px] text-zinc-500">{result.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
+                    </div>
+                    {/* MA까지 거리 */}
+                    {distPct !== null && (
+                      <div className="hidden sm:block text-[9px] text-zinc-500 shrink-0">
+                        {maLabel} +{distPct}%
+                      </div>
+                    )}
+                    {/* 상승률 */}
+                    <div className={`text-[10px] font-bold shrink-0 ${cr >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {cr >= 0 ? '+' : ''}{cr.toFixed(1)}%
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono shrink-0">
+                      ₩{formatNumber(result.currentPrice)}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-white font-mono shrink-0 text-right">
-                    ₩{formatNumber(result.currentPrice)}
-                  </div>
-                </div>
-              );
+                );
+              };
 
               // 섹션 카드 헬퍼
               const SectionCard = ({
-                title, desc, accent, icon, items, empty,
+                title, desc, accent, icon, items, maKey, maLabel, empty,
               }: {
                 title: string; desc: string; accent: string; icon: string;
-                items: MultiTimeframeResult[]; empty?: string;
+                items: MultiTimeframeResult[];
+                maKey?: keyof MultiTimeframeResult;
+                maLabel?: string;
+                empty?: string;
               }) => (
                 <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
                   <div className={`px-2 py-2 sm:p-3 border-b border-zinc-800 ${accent} rounded-t-lg`}>
@@ -467,9 +475,16 @@ export default function AnalysisPage() {
                     </div>
                     <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5 truncate">{desc}</p>
                   </div>
-                  <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+                  <div className="overflow-y-auto" style={{ maxHeight: '280px' }}>
                     {items.length > 0 ? (
-                      items.map(r => <CoinRow key={`${r.exchange}-${r.symbol}`} result={r} />)
+                      items.map(r => (
+                        <CoinRow
+                          key={`${r.exchange}-${r.symbol}`}
+                          result={r}
+                          maValue={maKey ? (r[maKey] as number | undefined) : undefined}
+                          maLabel={maLabel}
+                        />
+                      ))
                     ) : (
                       <div className="p-4 text-center text-[10px] text-zinc-500">{empty || '해당 종목 없음'}</div>
                     )}
@@ -478,179 +493,104 @@ export default function AnalysisPage() {
               );
 
               return (
-                <div className="space-y-4">
-                  {/* Row 1: 타임프레임별 돌파 타점 (4열) */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <SectionCard
-                      title="5분봉 타점"
-                      desc="5m 박스권 상단 근처"
-                      icon="⚡"
-                      accent="border-b-orange-500/30"
-                      items={section5m}
-                      empty="해당 종목 없음"
-                    />
-                    <SectionCard
-                      title="30분봉 타점"
-                      desc="30m 박스권 상단 근처"
-                      icon="🔥"
-                      accent="border-b-orange-400/30"
-                      items={section30m}
-                      empty="해당 종목 없음"
-                    />
-                    <SectionCard
-                      title="1시간봉 타점"
-                      desc="1h 박스권 상단 근처"
-                      icon="🚀"
-                      accent="border-b-yellow-500/30"
-                      items={section1h}
-                      empty="해당 종목 없음"
-                    />
-                    <SectionCard
-                      title="4시간봉 타점"
-                      desc="4h 박스권 상단 근처"
-                      icon="💎"
-                      accent="border-b-green-500/30"
-                      items={section4h}
-                      empty="해당 종목 없음"
-                    />
-                  </div>
-
-                  {/* Row 2: 구름 타점 + 스윙 타점 (2열) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <SectionCard
-                      title="구름 타점"
-                      desc="5m · 30m · 1h · 4h 모두 일목구름 위"
-                      icon="☁️"
-                      accent="border-b-purple-500/30"
-                      items={sectionCloud}
-                      empty="4개 타임프레임 모두 구름 위인 종목 없음"
-                    />
-                    <SectionCard
-                      title="스윙 타점"
-                      desc="현재가 > 1h MA50 · 5m MA50"
-                      icon="📈"
-                      accent="border-b-blue-500/30"
-                      items={sectionSwing}
-                      empty="MA50 우상향 종목 없음"
-                    />
-                  </div>
-
-                  {/* Row 2b: 스윙 리커버리 (전체 너비) */}
-                  <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
-                    <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-cyan-500/30 rounded-t-lg">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-sm shrink-0">🔄</span>
-                        <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">스윙 리커버리</h3>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionSwingRecovery.length}</span>
-                      </div>
-                      <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">하락 추세(MA50 기울기↓) → 횡보(기울기 0근처) 후 현재가 1h MA50 위</p>
+                <div className="space-y-6">
+                  {/* 일봉 MA 라이딩 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">일봉</span>
+                      <span className="text-[10px] text-zinc-500">MA110 · VWMA110 · MA180 라이딩</span>
                     </div>
-                    <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
-                      {sectionSwingRecovery.length > 0 ? (
-                        sectionSwingRecovery.map(r => (
-                          <div
-                            key={`${r.exchange}-${r.symbol}`}
-                            onClick={() => setSelectedCoin(r)}
-                            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
-                              <span className="text-[9px] font-bold text-cyan-400">{r.symbol.slice(0, 2)}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1 min-w-0">
-                                <span className="text-xs font-bold text-white truncate">{r.symbol}</span>
-                                {isBinanceAlpha(r.symbol) && (
-                                  <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
-                                )}
-                              </div>
-                              <div className="text-[9px] text-zinc-500">{r.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
-                            </div>
-                            <div className="hidden sm:flex flex-col items-end gap-0.5 shrink-0">
-                              <span className="text-[8px] text-red-400">과거 {r.swingRecovery!.slopeOld > 0 ? '+' : ''}{r.swingRecovery!.slopeOld}%</span>
-                              <span className="text-[8px] text-cyan-400">현재 {r.swingRecovery!.slopeRecent > 0 ? '+' : ''}{r.swingRecovery!.slopeRecent}%</span>
-                            </div>
-                            <div className="text-[10px] text-white font-mono shrink-0 text-right">
-                              ₩{formatNumber(r.currentPrice)}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-4 text-center text-[10px] text-zinc-500">하락→횡보→MA50 위 전환 종목 없음</div>
-                      )}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <SectionCard
+                        title="MA110 라이딩"
+                        desc="현재가 일봉 MA110 위 0~5% · 기울기 ↑"
+                        icon="📈"
+                        accent="border-b-blue-500/30"
+                        items={sectionMA110}
+                        maKey="ma110"
+                        maLabel="MA110"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="VWMA110 라이딩"
+                        desc="현재가 일봉 VWMA110 위 0~5% · 기울기 ↑"
+                        icon="🔮"
+                        accent="border-b-purple-500/30"
+                        items={sectionVWMA110}
+                        maKey="vwma110"
+                        maLabel="VWMA110"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="MA180 라이딩"
+                        desc="현재가 일봉 MA180 위 0~5% · 기울기 ↑"
+                        icon="💎"
+                        accent="border-b-green-500/30"
+                        items={sectionMA180}
+                        maKey="ma180"
+                        maLabel="MA180"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="5분봉 MA50 라이딩"
+                        desc="현재가 5m MA50 위 0~5% · 기울기 ↑"
+                        icon="⚡"
+                        accent="border-b-orange-500/30"
+                        items={section5mMA50}
+                        maKey="ma50_5m"
+                        maLabel="MA50"
+                        empty="조건 충족 종목 없음"
+                      />
                     </div>
                   </div>
 
-                  {/* Row 3: 기준봉 발생 + 눌림목 타점 (2열) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* 기준봉 발생 종목 */}
-                    <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
-                      <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-amber-500/30 rounded-t-lg">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-sm shrink-0">⚡</span>
-                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">기준봉 발생</h3>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionTriggered.length}</span>
-                        </div>
-                        <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">최근 7일 내 장대양봉(몸통 7%+, 거래량 10배+) 발생</p>
-                      </div>
-                      <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
-                        {sectionTriggered.length > 0 ? (
-                          sectionTriggered.map(r => <CoinRow key={`${r.exchange}-${r.symbol}`} result={r} />)
-                        ) : (
-                          <div className="p-4 text-center text-[10px] text-zinc-500">기준봉 발생 종목 없음</div>
-                        )}
-                      </div>
+                  {/* 1시간봉 MA 라이딩 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">1시간봉</span>
+                      <span className="text-[10px] text-zinc-500">MA50 · MA110 · MA180 · VWMA110 라이딩</span>
                     </div>
-
-                    {/* 눌림목 타점 */}
-                    <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col">
-                      <div className="px-2 py-2 sm:p-3 border-b border-zinc-800 border-b-green-500/30 rounded-t-lg">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-sm shrink-0">🧲</span>
-                          <h3 className="text-xs sm:text-sm font-bold text-white flex-1 min-w-0 truncate">눌림목 타점</h3>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold shrink-0">{sectionPullback.length}</span>
-                        </div>
-                        <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">기준봉 발생 후 110/180일선 ±2% 눌림목</p>
-                      </div>
-                      <div className="overflow-y-auto" style={{ maxHeight: '260px' }}>
-                        {sectionPullback.length > 0 ? (
-                          sectionPullback.map(r => (
-                            <div
-                              key={`${r.exchange}-${r.symbol}`}
-                              onClick={() => setSelectedCoin(r)}
-                              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 active:bg-zinc-800/70 cursor-pointer transition-colors last:border-b-0"
-                            >
-                              <div className="w-6 h-6 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
-                                <span className="text-[9px] font-bold text-yellow-500">{r.symbol.slice(0, 2)}</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <span className="text-xs font-bold text-white truncate">{r.symbol}</span>
-                                  {isBinanceAlpha(r.symbol) && (
-                                    <span className="text-[7px] px-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 font-bold shrink-0 leading-tight">A</span>
-                                  )}
-                                </div>
-                                <div className="text-[9px] text-zinc-500">{r.exchange === 'upbit' ? '업비트' : '빗썸'}</div>
-                              </div>
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                                r.pullbackSignal === 'TREND_110'
-                                  ? 'bg-green-500/20 text-green-400'
-                                  : r.pullbackSignal === 'SUPPORT_50'
-                                    ? 'bg-orange-500/20 text-orange-400'
-                                    : 'bg-blue-500/20 text-blue-400'
-                              }`}>
-                                {r.pullbackSignal === 'TREND_110' ? 'MA110 추세'
-                                  : r.pullbackSignal === 'SUPPORT_50' ? 'MA50 지지'
-                                  : 'MA180 지지'}
-                              </span>
-                              <div className="text-[10px] text-white font-mono shrink-0 text-right">
-                                ₩{formatNumber(r.currentPrice)}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-4 text-center text-[10px] text-zinc-500">눌림목 조건 종목 없음</div>
-                        )}
-                      </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <SectionCard
+                        title="1h MA50 라이딩"
+                        desc="현재가 1h MA50 위 0~5% · 기울기 ↑"
+                        icon="⚡"
+                        accent="border-b-orange-400/30"
+                        items={section1hMA50}
+                        maKey="ma50_1h"
+                        maLabel="1h MA50"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="1h MA110 라이딩"
+                        desc="현재가 1h MA110 위 0~5% · 기울기 ↑"
+                        icon="📈"
+                        accent="border-b-blue-400/30"
+                        items={section1hMA110}
+                        maKey="ma110_1h"
+                        maLabel="1h MA110"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="1h MA180 라이딩"
+                        desc="현재가 1h MA180 위 0~5% · 기울기 ↑"
+                        icon="💎"
+                        accent="border-b-green-400/30"
+                        items={section1hMA180}
+                        maKey="ma180_1h"
+                        maLabel="1h MA180"
+                        empty="조건 충족 종목 없음"
+                      />
+                      <SectionCard
+                        title="1h VWMA110 라이딩"
+                        desc="현재가 1h VWMA110 위 0~5% · 기울기 ↑"
+                        icon="🔮"
+                        accent="border-b-purple-400/30"
+                        items={section1hVWMA110}
+                        maKey="vwma110_1h"
+                        maLabel="1h VWMA110"
+                        empty="조건 충족 종목 없음"
+                      />
                     </div>
                   </div>
                 </div>
@@ -725,33 +665,15 @@ export default function AnalysisPage() {
             <span className="text-zinc-500 text-sm">💡</span>
             <div className="space-y-2 sm:space-y-3">
               <div>
-                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">멀티 타임프레임 분석:</p>
+                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">MA 라이딩 분석:</p>
                 <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
-                  <li>• 업비트 & 빗썸 전체 종목 분석 (중복 제외)</li>
-                  <li>• 30분봉, 1시간봉, 4시간봉, 일봉 동시 확인</li>
-                  <li>• 여러 시간대에서 동시 박스권 형성 종목 우선 표시</li>
-                  <li>• ✓ 표시: 해당 시간대에서 박스권 형성</li>
-                  <li>• 서버 시작 시 자동 분석 & 5분마다 백그라운드 갱신</li>
-                  <li>• 캐시된 데이터 즉시 표시, 분석 중에도 이전 데이터 확인 가능</li>
-                </ul>
-              </div>
-
-              <div>
-                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">관심종목:</p>
-                <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
-                  <li>• <span className="text-cyan-400">★ 관심</span>: 1시간봉 MA50이 우상향 추세 (최근 5봉 중 3봉 이상 상승)</li>
-                  <li>• 중장기 상승 추세에 있는 종목으로 박스권 돌파 시 추가 상승 가능성 높음</li>
-                </ul>
-              </div>
-
-<div>
-                <p className="mb-1.5 sm:mb-2 font-medium text-zinc-300">가격 위치:</p>
-                <ul className="space-y-0.5 sm:space-y-1 text-zinc-500">
-                  <li>• <span className="text-red-400">돌파</span>: 박스권 상단 돌파 (3% 이상)</li>
-                  <li>• <span className="text-orange-400">상단</span>: 박스권 상단 구간 (66-100%)</li>
-                  <li>• <span className="text-yellow-400">중단</span>: 박스권 중간 구간 (33-66%)</li>
-                  <li>• <span className="text-green-400">하단</span>: 박스권 하단 구간 (0-33%)</li>
-                  <li>• <span className="text-blue-400">이탈</span>: 박스권 하단 이탈 (3% 이상)</li>
+                  <li>• 24h 상승률 상위 100종목을 대상으로 분석</li>
+                  <li>• <span className="text-orange-400">MA 라이딩</span>: 현재가가 MA 바로 위(0~5%)에 있고 MA 기울기가 양수인 종목</li>
+                  <li>• <span className="text-zinc-300">일봉</span>: MA110 · VWMA110 · MA180 · 5분봉 MA50 라이딩</li>
+                  <li>• <span className="text-cyan-400">1시간봉</span>: MA50 · MA110 · MA180 · VWMA110 라이딩</li>
+                  <li>• <span className="text-zinc-400">VWMA110</span>: 거래량 가중 이동평균 — 거래량이 많은 시점에 더 큰 가중치</li>
+                  <li>• 각 섹션의 MA 거리(+X%)는 현재가가 해당 MA보다 얼마나 위에 있는지 표시</li>
+                  <li>• 1h MA180은 약 7.5일치 1시간봉 데이터 필요 — 신규 상장 종목은 미표시될 수 있음</li>
                 </ul>
               </div>
             </div>
