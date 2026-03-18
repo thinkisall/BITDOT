@@ -33,7 +33,7 @@ interface VolumeSpike {
 
 interface MultiTimeframeResult {
   symbol: string;
-  exchange: 'upbit' | 'bithumb';
+  exchange: 'upbit' | 'bithumb' | 'bybit';
   volume: number;
   currentPrice: number;
   changeRate: number;          // 24h 상승률 (%)

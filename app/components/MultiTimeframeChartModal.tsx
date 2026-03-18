@@ -15,7 +15,7 @@ interface MultiTimeframeChartModalProps {
   isOpen: boolean;
   onClose: () => void;
   symbol: string;
-  exchange: 'upbit' | 'bithumb';
+  exchange: 'upbit' | 'bithumb' | 'bybit';
   timeframes: {
     '5m': TimeframeBoxInfo;
     '30m': TimeframeBoxInfo;
@@ -448,7 +448,7 @@ export default function MultiTimeframeChartModal({
                 <span className="ml-2 text-xs font-normal text-zinc-500 tracking-normal">멀티 타임프레임</span>
               </h2>
               <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">
-                {exchange === 'upbit' ? '업비트 (Upbit)' : '빗썸 (Bithumb)'}
+                {exchange === 'upbit' ? '업비트 (Upbit)' : exchange === 'bybit' ? 'Bybit (USDT)' : '빗썸 (Bithumb)'}
               </p>
             </div>
           </div>

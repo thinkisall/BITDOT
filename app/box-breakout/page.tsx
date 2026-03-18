@@ -41,6 +41,9 @@ export default function BoxBreakoutPage() {
     lastUpdated,
     timeframe,
     setTimeframe,
+    exchange,
+    setExchange,
+    setSignals,
     fetchData,
     handleRefresh,
     isAlphaToken,
@@ -263,6 +266,24 @@ export default function BoxBreakoutPage() {
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
         />
+
+        {/* 거래소 탭 */}
+        <div className="flex gap-1 mb-4 p-1 bg-secondary/40 rounded-lg border border-border/60 w-fit">
+          {([
+            { key: 'bithumb', label: '빗썸 KRW',   activeClass: 'bg-orange-500 text-white' },
+            { key: 'bybit',   label: 'Bybit USDT', activeClass: 'bg-yellow-400 text-black' },
+          ] as const).map(({ key, label, activeClass }) => (
+            <button
+              key={key}
+              onClick={() => { setExchange(key); setSignals([]); }}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                exchange === key ? `${activeClass} shadow` : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <BoxBreakoutFilters
           searchTerm={searchTerm}

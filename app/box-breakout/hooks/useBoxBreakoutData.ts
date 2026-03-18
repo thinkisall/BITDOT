@@ -14,6 +14,7 @@ export function useBoxBreakoutData() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [lastUpdated, setLastUpdated] = useState<number>(0);
   const [timeframe, setTimeframe] = useState<string>("1h");
+  const [exchange, setExchange] = useState<'bithumb' | 'bybit'>('bithumb');
 
   const { data: alphaData } = useSWR<AlphaToken[]>(
     "/api/binance-alpha",
@@ -31,7 +32,7 @@ export function useBoxBreakoutData() {
       if (isInitialLoad) setLoading(true);
 
       // 홈서버에서 무거운 연산 처리
-      const res = await fetch(getHomeServerUrl(`/api/box-breakout?timeframe=${timeframe}`));
+      const res = await fetch(getHomeServerUrl(`/api/box-breakout?timeframe=${timeframe}&exchange=${exchange}`));
       const data: ApiResponse<BoxBreakoutSignal> = await res.json();
 
       if (data.signals) setSignals(data.signals);
@@ -44,7 +45,7 @@ export function useBoxBreakoutData() {
       if (isInitialLoad) setLoading(false);
       setIsRefreshing(false);
     }
-  }, [timeframe]);
+  }, [timeframe, exchange]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -76,6 +77,9 @@ export function useBoxBreakoutData() {
     lastUpdated,
     timeframe,
     setTimeframe,
+    exchange,
+    setExchange,
+    setSignals,
     fetchData,
     handleRefresh,
     isAlphaToken,

@@ -5,10 +5,10 @@ const express = require('express');
 const router = express.Router();
 
 // ── 캐시 (2분 TTL) ─────────────────────────────────────────────────────────
-const cacheMap = new Map(); // timeframe → { data, timestamp }
+const cacheMap = new Map(); // `${exchange}-${timeframe}` → { data, timestamp }
 const CACHE_TTL = 2 * 60 * 1000;
-let isAnalyzing = false;
-let progress = { current: 0, total: 0 };
+const analyzingMap = {}; // `${exchange}-${timeframe}` → boolean
+const progressMap  = {}; // `${exchange}-${timeframe}` → { current, total }
 
 // ── 동시 요청 제한 ──────────────────────────────────────────────────────────
 function createConcurrencyLimiter(concurrency) {
@@ -65,6 +65,25 @@ async function fetchUpbitCandles(market, timeframe, count = 100) {
   }));
 }
 
+// ── 바이비트 캔들 ─────────────────────────────────────────────────────────
+async function fetchBybitCandles(symbol, timeframe, count = 200) {
+  const tfMap = { '1m': '1', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240', '1d': 'D' };
+  const interval = tfMap[timeframe] || '60';
+  const bybitSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
+  const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${interval}&limit=${count}`;
+  const data = await apiLimit(() => fetchJson(url));
+  if (data.retCode !== 0 || !data.result?.list) return [];
+  return data.result.list.reverse().map((c) => ({
+    time:        Number(c[0]),
+    open:        parseFloat(c[1]),
+    high:        parseFloat(c[2]),
+    low:         parseFloat(c[3]),
+    close:       parseFloat(c[4]),
+    volume:      parseFloat(c[5]),
+    quoteVolume: parseFloat(c[6] || '0'),
+  }));
+}
+
 // ── 빗썸 캔들 ──────────────────────────────────────────────────────────────
 async function fetchBithumbCandles(symbol, timeframe) {
   const tfMap = {
@@ -91,17 +110,30 @@ const MAJOR_COINS = new Set([
   'DOT','MATIC','AVAX','LINK','UNI','ATOM','LTC','BCH','ETC','XLM',
 ]);
 
-async function getMarkets() {
+async function getMarkets(exchange = 'bithumb') {
+  if (exchange === 'bybit') {
+    const data = await fetchJson('https://api.bybit.com/v5/market/tickers?category=linear');
+    if (data.retCode !== 0 || !data.result?.list) return [];
+    return data.result.list
+      .filter(t => t.symbol.endsWith('USDT') && !t.symbol.includes('USDC'))
+      .filter(t => !MAJOR_COINS.has(t.symbol.replace('USDT', '')))
+      .map(t => ({
+        symbol:      t.symbol,
+        market:      t.symbol.replace('USDT', ''),
+        exchange:    'bybit',
+        quoteVolume: parseFloat(t.turnover24h || '0'),
+      }))
+      .sort((a, b) => b.quoteVolume - a.quoteVolume);
+  }
+
   const bithumbRes = await fetchJson('https://api.bithumb.com/public/ticker/ALL_KRW');
-
   if (bithumbRes.status !== '0000' || !bithumbRes.data) return [];
-
   return Object.entries(bithumbRes.data)
     .filter(([sym]) => sym !== 'date' && !MAJOR_COINS.has(sym))
     .map(([sym, t]) => ({
-      symbol: sym + 'KRW',
-      market: sym,
-      exchange: 'bithumb',
+      symbol:      sym + 'KRW',
+      market:      sym,
+      exchange:    'bithumb',
       quoteVolume: Number(t.acc_trade_value_24H || 0),
     }))
     .sort((a, b) => b.quoteVolume - a.quoteVolume);
@@ -166,9 +198,10 @@ function scoreSignal(signal, candles, ma50) {
 // ── 종목 분석 ───────────────────────────────────────────────────────────────
 async function analyzeSymbol(market, timeframe) {
   try {
-    const candles = market.exchange === 'upbit'
-      ? await fetchUpbitCandles(market.market, timeframe, 100)
-      : await fetchBithumbCandles(market.market, timeframe);
+    const candles =
+      market.exchange === 'upbit'   ? await fetchUpbitCandles(market.market, timeframe, 200) :
+      market.exchange === 'bybit'   ? await fetchBybitCandles(market.market, timeframe, 200) :
+                                      await fetchBithumbCandles(market.market, timeframe);
 
     if (candles.length < 25) return null;
 
@@ -241,19 +274,22 @@ async function analyzeSymbol(market, timeframe) {
 }
 
 // ── 분석 실행 ───────────────────────────────────────────────────────────────
-async function performAnalysis(timeframe) {
-  isAnalyzing = true;
+async function performAnalysis(timeframe, exchange = 'bithumb') {
+  const key = `${exchange}-${timeframe}`;
+  analyzingMap[key] = true;
+  progressMap[key]  = { current: 0, total: 0 };
   try {
-    const markets = await getMarkets();
-    progress = { current: 0, total: markets.length };
+    const markets = await getMarkets(exchange);
+    progressMap[key] = { current: 0, total: markets.length };
 
-    const limit = createConcurrencyLimiter(5);
+    const concurrency = exchange === 'bybit' ? 8 : 5;
+    const limit = createConcurrencyLimiter(concurrency);
     const results = (
       await Promise.all(
         markets.map((m) =>
           limit(async () => {
             const r = await analyzeSymbol(m, timeframe);
-            progress.current++;
+            progressMap[key].current++;
             return r;
           })
         )
@@ -263,11 +299,11 @@ async function performAnalysis(timeframe) {
     results.sort((a, b) => (b.scoreDetails?.totalScore || 0) - (a.scoreDetails?.totalScore || 0));
 
     const cacheEntry = { signals: results, lastUpdated: Date.now() };
-    cacheMap.set(timeframe, { data: cacheEntry, timestamp: Date.now() });
+    cacheMap.set(key, { data: cacheEntry, timestamp: Date.now() });
     return cacheEntry;
   } finally {
-    isAnalyzing = false;
-    progress = { current: 0, total: 0 };
+    analyzingMap[key] = false;
+    progressMap[key]  = { current: 0, total: 0 };
   }
 }
 
@@ -313,30 +349,30 @@ router.get('/symbol/:symbol', async (req, res) => {
 // ── Route ──────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const timeframe = req.query.timeframe || '1h';
+  const ex        = req.query.exchange;
+  const exchange  = ex === 'bybit' ? 'bybit' : 'bithumb';
+  const key       = `${exchange}-${timeframe}`;
 
-  const cached = cacheMap.get(timeframe);
-  const now = Date.now();
+  const cached    = cacheMap.get(key);
+  const now       = Date.now();
+  const isRunning = !!analyzingMap[key];
+  const progress  = progressMap[key] || { current: 0, total: 0 };
 
   if (cached && now - cached.timestamp < CACHE_TTL) {
     return res.json({ ...cached.data, isAnalyzing: false, progress });
   }
 
-  if (isAnalyzing) {
-    if (cached) {
-      return res.json({ ...cached.data, isAnalyzing: true, progress });
-    }
+  if (isRunning) {
+    if (cached) return res.json({ ...cached.data, isAnalyzing: true, progress });
     return res.json({ signals: [], lastUpdated: 0, isAnalyzing: true, progress });
   }
 
   // 백그라운드 분석 시작
-  performAnalysis(timeframe).catch((err) => {
-    console.error('[BoxBreakout] 분석 실패:', err.message);
+  performAnalysis(timeframe, exchange).catch((err) => {
+    console.error(`[BoxBreakout:${exchange}] 분석 실패:`, err.message);
   });
 
-  if (cached) {
-    return res.json({ ...cached.data, isAnalyzing: true, progress });
-  }
-
+  if (cached) return res.json({ ...cached.data, isAnalyzing: true, progress });
   return res.json({ signals: [], lastUpdated: 0, isAnalyzing: true, progress });
 });
 
