@@ -70,6 +70,10 @@ interface MultiTimeframeResult {
   ridingMA110?: boolean;
   ridingVWMA110?: boolean;
   ridingMA180?: boolean;
+  // 일목구름 상단/하단값
+  cloudTop1h?: number;  cloudBot1h?: number;
+  cloudTop4h?: number;  cloudBot4h?: number;
+  cloudTop30m?: number; cloudBot30m?: number;
   // 기존 호환
   cloudStatus5m?: 'above' | 'near';
   cloudStatus30m?: 'above' | 'near';
@@ -105,33 +109,35 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCoin, setSelectedCoin] = useState<MultiTimeframeResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeExchange, setActiveExchange] = useState<'bithumb' | 'bybit' | 'upbit'>('bithumb');
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // 항상 상대 경로 사용 (Vercel에서는 rewrite로 터널 프록시, 로컬에서는 Next.js API 직접)
   const ANALYSIS_URL = '/api/multi-timeframe';
 
-  // 페이지 마운트 시 자동으로 데이터 가져오기
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch(ANALYSIS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (response.ok) {
-          const data: AnalysisResponse = await response.json();
-          setResults(data);
-        }
-      } catch (e) {
-        console.error('Failed to fetch initial data:', e);
+  const fetchAnalysisData = async (exchange: 'bithumb' | 'bybit' | 'upbit') => {
+    try {
+      const response = await fetch(ANALYSIS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exchange }),
+      });
+      if (response.ok) {
+        const data: AnalysisResponse = await response.json();
+        setResults(data);
       }
-    };
+    } catch (e) {
+      console.error('Failed to fetch analysis data:', e);
+    }
+  };
 
-    fetchData();
-  }, [ANALYSIS_URL]);
+  // 거래소 탭 변경 시 결과 초기화 + 재요청
+  useEffect(() => {
+    setResults(null);
+    fetchAnalysisData(activeExchange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeExchange]);
 
-  // 자동 갱신: 탭 활성 시 10초, 백그라운드 시 60초 (Visibility API)
+  // 자동 갱신: 분석 중이거나 오래된 캐시일 때 10초 간격
   useEffect(() => {
     const shouldAutoRefresh = results && (
       results.totalAnalyzed === 0 ||
@@ -143,20 +149,7 @@ export default function AnalysisPage() {
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    const doFetch = async () => {
-      try {
-        const response = await fetch(ANALYSIS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (response.ok) {
-          const data: AnalysisResponse = await response.json();
-          setResults(data);
-        }
-      } catch (e) {
-        console.error('Auto-refresh failed:', e);
-      }
-    };
+    const doFetch = () => fetchAnalysisData(activeExchange);
 
     const startInterval = () => {
       if (intervalId) clearInterval(intervalId);
@@ -171,7 +164,8 @@ export default function AnalysisPage() {
       if (intervalId) clearInterval(intervalId);
       document.removeEventListener('visibilitychange', startInterval);
     };
-  }, [results?.totalAnalyzed, results?.analyzing, results?.stale, ANALYSIS_URL]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results?.totalAnalyzed, results?.analyzing, results?.stale, activeExchange]);
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -179,19 +173,7 @@ export default function AnalysisPage() {
     setResults(null);
 
     try {
-      const response = await fetch(ANALYSIS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data: AnalysisResponse = await response.json();
-      setResults(data);
+      await fetchAnalysisData(activeExchange);
     } catch (e: any) {
       setError(e?.message || '분석 중 오류가 발생했습니다');
     } finally {
@@ -221,6 +203,18 @@ export default function AnalysisPage() {
     const hours = Math.floor(minutes / 60);
     return `${hours}시간 ${minutes % 60}분 전`;
   };
+
+  // 거래소별 가격 포매팅
+  const formatPrice = (price: number) => {
+    if (activeExchange === 'bybit') {
+      if (price >= 1000)  return price.toFixed(2);
+      if (price >= 1)     return price.toFixed(4);
+      if (price >= 0.001) return price.toFixed(6);
+      return price.toFixed(8);
+    }
+    return formatNumber(price); // KRW: 소수점 없음
+  };
+  const priceUnit = activeExchange === 'bybit' ? 'USDT' : '₩';
 
   const getTimeframeColor = (tf: TimeframeBoxInfo) => {
     if (!tf.hasBox) return 'bg-zinc-800 text-zinc-500';
@@ -286,6 +280,11 @@ export default function AnalysisPage() {
   const sectionBox4h = byChangeRate(filteredResults.filter(r => isBoxAlert(r, '4h')));
   const sectionBox1h = byChangeRate(filteredResults.filter(r => isBoxAlert(r, '1h')));
 
+  // ─ 일목구름대 돌파 섹션 (cloudStatus === 'above') ─────────────────────────
+  const sectionCloud4h  = byChangeRate(filteredResults.filter(r => r.cloudStatus4h  === 'above'));
+  const sectionCloud1h  = byChangeRate(filteredResults.filter(r => r.cloudStatus    === 'above'));
+  const sectionCloud30m = byChangeRate(filteredResults.filter(r => r.cloudStatus30m === 'above'));
+
   // ─ 1시간봉 MA 라이딩 섹션 ──────────────────────────────────────────────────
   const section1hMA50    = byChangeRate(filteredResults.filter(r => r.riding1hMA50));
   const section1hMA110   = byChangeRate(filteredResults.filter(r => r.riding1hMA110));
@@ -305,6 +304,25 @@ export default function AnalysisPage() {
           <p className="text-xs sm:text-sm text-zinc-400">
             30분봉, 1시간봉, 4시간봉, 일봉에서 박스권을 동시에 확인합니다
           </p>
+        </div>
+
+        {/* 거래소 탭 */}
+        <div className="flex gap-1 mb-4 p-1 bg-zinc-900 rounded-lg border border-zinc-800 w-fit">
+          {([
+            { key: 'bithumb', label: '빗썸 KRW',   active: 'bg-orange-500 text-white' },
+            { key: 'upbit',   label: '업비트 KRW',  active: 'bg-blue-500 text-white'   },
+            { key: 'bybit',   label: 'Bybit USDT', active: 'bg-yellow-400 text-black' },
+          ] as const).map(({ key, label, active }) => (
+            <button
+              key={key}
+              onClick={() => setActiveExchange(key)}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                activeExchange === key ? `${active} shadow` : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* 데이터 로딩 안내 */}
@@ -496,7 +514,7 @@ export default function AnalysisPage() {
                       {cr >= 0 ? '+' : ''}{cr.toFixed(1)}%
                     </div>
                     <div className="text-[10px] text-zinc-400 font-mono shrink-0">
-                      ₩{formatNumber(result.currentPrice)}
+                      {priceUnit}{formatPrice(result.currentPrice)}
                     </div>
                   </div>
                 );
@@ -538,6 +556,50 @@ export default function AnalysisPage() {
                 </div>
               );
 
+              // 일목구름대 돌파 row
+              const CloudBreakRow = ({ result, cloudTop, cloudBot }: {
+                result: MultiTimeframeResult;
+                cloudTop?: number;
+                cloudBot?: number;
+              }) => {
+                const cr = result.changeRate ?? 0;
+                const distPct = cloudTop && result.currentPrice
+                  ? ((result.currentPrice - cloudTop) / cloudTop * 100)
+                  : null;
+                const cloudThick = cloudTop && cloudBot && cloudBot > 0
+                  ? ((cloudTop - cloudBot) / cloudBot * 100)
+                  : null;
+                return (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer transition-colors"
+                    onClick={() => setSelectedCoin(result)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white truncate">{result.symbol}</span>
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">{result.exchange}</span>
+                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold shrink-0">☁ 위</span>
+                      </div>
+                      {cloudTop && cloudThick !== null && (
+                        <div className="text-[9px] text-zinc-500 mt-0.5">
+                          구름상단 {formatNumber(cloudTop)} · 두께 {cloudThick.toFixed(1)}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={`text-xs font-bold ${cr >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                        {cr >= 0 ? '+' : ''}{cr.toFixed(2)}%
+                      </div>
+                      {distPct !== null && (
+                        <div className="text-[9px] text-sky-400 font-medium">
+                          +{distPct.toFixed(1)}% 위
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              };
+
               // 박스권 상단 섹션 전용 row — 해당 타임프레임 위치 배지 표시
               const BoxTopRow = ({ result, tf }: { result: MultiTimeframeResult; tf: '1h' | '4h' }) => {
                 const cr = result.changeRate ?? 0;
@@ -577,7 +639,7 @@ export default function AnalysisPage() {
                       {cr >= 0 ? '+' : ''}{cr.toFixed(1)}%
                     </div>
                     <div className="text-[10px] text-zinc-400 font-mono shrink-0">
-                      ₩{formatNumber(result.currentPrice)}
+                      {priceUnit}{formatPrice(result.currentPrice)}
                     </div>
                   </div>
                 );
@@ -618,6 +680,61 @@ export default function AnalysisPage() {
                           {sectionBox1h.length > 0 ? (
                             sectionBox1h.map(r => <BoxTopRow key={`${r.exchange}-${r.symbol}`} result={r} tf="1h" />)
                           ) : (
+                            <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 일목구름대 돌파 섹션 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">일목구름대</span>
+                      <span className="text-[10px] text-zinc-500">구름 위로 돌파한 종목 (4h · 1h · 30m)</span>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                      {/* 4시간봉 */}
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="px-3 py-2 border-b border-sky-500/25 rounded-t-lg flex items-center gap-2">
+                          <span className="text-sm">☁</span>
+                          <h3 className="text-xs font-bold text-white flex-1">4시간봉 구름 돌파</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{sectionCloud4h.length}</span>
+                        </div>
+                        <div className="overflow-y-auto" style={{ maxHeight: '280px' }}>
+                          {sectionCloud4h.length > 0 ? sectionCloud4h.map(r => (
+                            <CloudBreakRow key={`${r.exchange}-${r.symbol}`} result={r} cloudTop={r.cloudTop4h} cloudBot={r.cloudBot4h} />
+                          )) : (
+                            <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
+                          )}
+                        </div>
+                      </div>
+                      {/* 1시간봉 */}
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="px-3 py-2 border-b border-sky-400/25 rounded-t-lg flex items-center gap-2">
+                          <span className="text-sm">☁</span>
+                          <h3 className="text-xs font-bold text-white flex-1">1시간봉 구름 돌파</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{sectionCloud1h.length}</span>
+                        </div>
+                        <div className="overflow-y-auto" style={{ maxHeight: '280px' }}>
+                          {sectionCloud1h.length > 0 ? sectionCloud1h.map(r => (
+                            <CloudBreakRow key={`${r.exchange}-${r.symbol}`} result={r} cloudTop={r.cloudTop1h} cloudBot={r.cloudBot1h} />
+                          )) : (
+                            <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
+                          )}
+                        </div>
+                      </div>
+                      {/* 30분봉 */}
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="px-3 py-2 border-b border-sky-300/25 rounded-t-lg flex items-center gap-2">
+                          <span className="text-sm">☁</span>
+                          <h3 className="text-xs font-bold text-white flex-1">30분봉 구름 돌파</h3>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-bold">{sectionCloud30m.length}</span>
+                        </div>
+                        <div className="overflow-y-auto" style={{ maxHeight: '280px' }}>
+                          {sectionCloud30m.length > 0 ? sectionCloud30m.map(r => (
+                            <CloudBreakRow key={`${r.exchange}-${r.symbol}`} result={r} cloudTop={r.cloudTop30m} cloudBot={r.cloudBot30m} />
+                          )) : (
                             <div className="p-4 text-center text-[10px] text-zinc-500">해당 종목 없음</div>
                           )}
                         </div>

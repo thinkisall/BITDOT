@@ -5,11 +5,11 @@
 const express = require('express');
 const router = express.Router();
 
-// ── 캐시 (10분 TTL) ────────────────────────────────────────────────────────
-let cache = null;
-let cacheTimestamp = 0;
+// ── 캐시 (10분 TTL) — 거래소별 독립 캐시 ────────────────────────────────────
 const CACHE_TTL = 10 * 60 * 1000;
-let isAnalyzing = false;
+const caches      = { bithumb: null,  bybit: null,  upbit: null  };
+const cacheTs     = { bithumb: 0,     bybit: 0,     upbit: 0     };
+const analyzing   = { bithumb: false, bybit: false, upbit: false };
 
 // ── 동시 요청 제한 헬퍼 ────────────────────────────────────────────────────
 function createConcurrencyLimiter(concurrency) {
@@ -30,9 +30,9 @@ function createConcurrencyLimiter(concurrency) {
   };
 }
 
-// ── 업비트 전용 API rate limiter (동시 요청 5개 제한) ─────────────────────
-// 5심볼 × 5타임프레임 동시 fetch = 25개 동시 요청 → 업비트 rate limit 초과 방지
+// ── API rate limiters ─────────────────────────────────────────────────────
 const upbitApiLimit = createConcurrencyLimiter(5);
+const bybitApiLimit = createConcurrencyLimiter(8);
 
 // ── fetch 헬퍼 (타임아웃 포함) ────────────────────────────────────────────
 async function fetchJson(url, timeoutMs = 10000) {
@@ -80,6 +80,23 @@ async function fetchBithumbCandles(symbol, timeframe) {
   }));
 }
 
+// ── 바이비트 캔들 fetch ───────────────────────────────────────────────────
+async function fetchBybitCandles(symbol, timeframe, count = 200) {
+  const tfMap = { '5m': '5', '30m': '30', '1h': '60', '4h': '240', '1d': 'D' };
+  const interval = tfMap[timeframe] || '60';
+  const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${count}`;
+  const data = await bybitApiLimit(() => fetchJson(url));
+  if (data.retCode !== 0 || !data.result?.list) return [];
+  return data.result.list.reverse().map((c) => ({
+    timestamp: Number(c[0]),
+    open:   parseFloat(c[1]),
+    high:   parseFloat(c[2]),
+    low:    parseFloat(c[3]),
+    close:  parseFloat(c[4]),
+    volume: parseFloat(c[5]),
+  }));
+}
+
 // ── 마켓 목록 fetch ───────────────────────────────────────────────────────
 const MAJOR_COINS = new Set([
   'BTC','ETH','XRP','USDT','USDC','BNB','SOL','ADA','DOGE','TRX',
@@ -113,6 +130,21 @@ async function fetchBithumbMarkets() {
       volume: Number(t.acc_trade_value_24H || 0),
       changeRate: parseFloat(t.fluctate_rate_24H || '0'),
       exchange: 'bithumb',
+    }));
+}
+
+async function fetchBybitMarkets() {
+  const data = await fetchJson('https://api.bybit.com/v5/market/tickers?category=linear');
+  if (data.retCode !== 0 || !data.result?.list) return [];
+  return data.result.list
+    .filter(t => t.symbol.endsWith('USDT') && !t.symbol.includes('USDC'))
+    .filter(t => !MAJOR_COINS.has(t.symbol.replace('USDT', '')))
+    .map(t => ({
+      symbol:      t.symbol.replace('USDT', ''),
+      market:      t.symbol,
+      volume:      parseFloat(t.turnover24h || '0'),
+      changeRate:  parseFloat(t.price24hPcnt || '0') * 100,
+      exchange:    'bybit',
     }));
 }
 
@@ -328,9 +360,13 @@ async function analyzeSymbol(item) {
     await Promise.all(
       timeframes.map(async (tf) => {
         try {
-          candlesMap[tf] = item.exchange === 'upbit'
-            ? await fetchUpbitCandles(item.market, tf, 200)
-            : await fetchBithumbCandles(item.symbol, tf);
+          if (item.exchange === 'upbit') {
+            candlesMap[tf] = await fetchUpbitCandles(item.market, tf, 200);
+          } else if (item.exchange === 'bybit') {
+            candlesMap[tf] = await fetchBybitCandles(item.market, tf, 200);
+          } else {
+            candlesMap[tf] = await fetchBithumbCandles(item.symbol, tf);
+          }
         } catch {
           candlesMap[tf] = [];
         }
@@ -429,6 +465,10 @@ async function analyzeSymbol(item) {
       cloudStatus4h:  checkCloudStatus(currentPrice, clouds['4h']),
     };
     Object.entries(cs).forEach(([k, v]) => { if (v) result[k] = v; });
+    // 구름 top/bottom 값 (거리% 표시용)
+    if (clouds['1h'])  { result.cloudTop1h  = clouds['1h'].cloudTop;  result.cloudBot1h  = clouds['1h'].cloudBottom; }
+    if (clouds['4h'])  { result.cloudTop4h  = clouds['4h'].cloudTop;  result.cloudBot4h  = clouds['4h'].cloudBottom; }
+    if (clouds['30m']) { result.cloudTop30m = clouds['30m'].cloudTop; result.cloudBot30m = clouds['30m'].cloudBottom; }
     if (isTriggered)  result.isTriggered    = true;
     if (pullback)     result.pullbackSignal = pullback;
     if (swingRecovery) result.swingRecovery = swingRecovery;
@@ -440,15 +480,19 @@ async function analyzeSymbol(item) {
 }
 
 // ── 메인 분석 루프 ─────────────────────────────────────────────────────────
-async function performAnalysis() {
+async function performAnalysis(exchange = 'bithumb') {
   try {
-    console.log('[Multi-TF] 마켓 목록 로드 중...');
-    const allMarkets = (await fetchBithumbMarkets())
-      .sort((a, b) => b.changeRate - a.changeRate);
+    console.log(`[Multi-TF:${exchange}] 마켓 목록 로드 중...`);
+    const allMarkets = (
+      exchange === 'bybit'  ? await fetchBybitMarkets()  :
+      exchange === 'upbit'  ? await fetchUpbitMarkets()  :
+                              await fetchBithumbMarkets()
+    ).sort((a, b) => b.changeRate - a.changeRate);
 
-    console.log(`[Multi-TF] 분석 시작: 전체 ${allMarkets.length}종목`);
+    console.log(`[Multi-TF:${exchange}] 분석 시작: 전체 ${allMarkets.length}종목`);
 
-    const limit = createConcurrencyLimiter(15);
+    const concurrency = exchange === 'bybit' ? 20 : 15;
+    const limit = createConcurrencyLimiter(concurrency);
     let done = 0;
 
     const results = (
@@ -457,7 +501,7 @@ async function performAnalysis() {
           limit(async () => {
             const r = await analyzeSymbol(item);
             done++;
-            if (done % 50 === 0) console.log(`[Multi-TF] 진행: ${done}/${allMarkets.length}`);
+            if (done % 50 === 0) console.log(`[Multi-TF:${exchange}] 진행: ${done}/${allMarkets.length}`);
             return r;
           })
         )
@@ -466,38 +510,40 @@ async function performAnalysis() {
 
     results.sort((a, b) => b.changeRate - a.changeRate);
 
-    cache = { results, totalAnalyzed: allMarkets.length, foundCount: results.length, lastUpdated: Date.now() };
-    cacheTimestamp = Date.now();
-    isAnalyzing = false;
+    caches[exchange] = { results, totalAnalyzed: allMarkets.length, foundCount: results.length, lastUpdated: Date.now() };
+    cacheTs[exchange] = Date.now();
+    analyzing[exchange] = false;
 
-    console.log(`[Multi-TF] 완료: ${results.length}개 결과`);
+    console.log(`[Multi-TF:${exchange}] 완료: ${results.length}개 결과`);
   } catch (err) {
-    console.error('[Multi-TF] 분석 실패:', err.message);
-    isAnalyzing = false;
+    console.error(`[Multi-TF:${exchange}] 분석 실패:`, err.message);
+    analyzing[exchange] = false;
     throw err;
   }
 }
 
 // ── Route Handler ─────────────────────────────────────────────────────────
-router.post('/', async (_req, res) => {
+router.post('/', async (req, res) => {
   try {
+    const ex = req.body?.exchange;
+    const exchange = ex === 'bybit' ? 'bybit' : ex === 'upbit' ? 'upbit' : 'bithumb';
     const now = Date.now();
 
-    if (cache && now - cacheTimestamp < CACHE_TTL) {
-      return res.json(cache);
+    if (caches[exchange] && now - cacheTs[exchange] < CACHE_TTL) {
+      return res.json(caches[exchange]);
     }
 
-    if (!isAnalyzing) {
-      isAnalyzing = true;
-      performAnalysis().catch((err) => {
-        console.error('[Multi-TF] 백그라운드 분석 에러:', err.message);
-        isAnalyzing = false;
+    if (!analyzing[exchange]) {
+      analyzing[exchange] = true;
+      performAnalysis(exchange).catch((err) => {
+        console.error(`[Multi-TF:${exchange}] 백그라운드 분석 에러:`, err.message);
+        analyzing[exchange] = false;
       });
     }
 
-    if (cache) {
-      const cacheAge = Math.floor((now - cacheTimestamp) / 1000);
-      return res.json({ ...cache, cached: true, stale: true, cacheAge, analyzing: true });
+    if (caches[exchange]) {
+      const cacheAge = Math.floor((now - cacheTs[exchange]) / 1000);
+      return res.json({ ...caches[exchange], cached: true, stale: true, cacheAge, analyzing: true });
     }
 
     return res.json({
@@ -510,22 +556,42 @@ router.post('/', async (_req, res) => {
   }
 });
 
-// 서버 시작 시 초기 분석
-console.log('[Multi-TF] 서버 초기화 - 첫 분석 시작...');
-performAnalysis().catch((err) => {
-  console.error('[Multi-TF] 초기 분석 실패:', err.message);
-  isAnalyzing = false;
+// 서버 시작 시 빗썸 분석 먼저, 바이비트는 1분 뒤 시작 (API 부하 분산)
+console.log('[Multi-TF] 서버 초기화 - 빗썸 분석 시작...');
+analyzing.bithumb = true;
+performAnalysis('bithumb').catch((err) => {
+  console.error('[Multi-TF] 빗썸 초기 분석 실패:', err.message);
+  analyzing.bithumb = false;
 });
+setTimeout(() => {
+  console.log('[Multi-TF] 바이비트 분석 시작...');
+  analyzing.bybit = true;
+  performAnalysis('bybit').catch((err) => {
+    console.error('[Multi-TF] 바이비트 초기 분석 실패:', err.message);
+    analyzing.bybit = false;
+  });
+}, 60 * 1000);
+
+setTimeout(() => {
+  console.log('[Multi-TF] 업비트 분석 시작...');
+  analyzing.upbit = true;
+  performAnalysis('upbit').catch((err) => {
+    console.error('[Multi-TF] 업비트 초기 분석 실패:', err.message);
+    analyzing.upbit = false;
+  });
+}, 120 * 1000);
 
 // 10분마다 자동 갱신
 setInterval(() => {
-  if (!isAnalyzing) {
-    console.log('[Multi-TF] 정기 갱신 시작...');
-    isAnalyzing = true;
-    performAnalysis().catch((err) => {
-      console.error('[Multi-TF] 정기 갱신 실패:', err.message);
-      isAnalyzing = false;
-    });
+  for (const ex of ['bithumb', 'bybit', 'upbit']) {
+    if (!analyzing[ex]) {
+      console.log(`[Multi-TF:${ex}] 정기 갱신 시작...`);
+      analyzing[ex] = true;
+      performAnalysis(ex).catch((err) => {
+        console.error(`[Multi-TF:${ex}] 정기 갱신 실패:`, err.message);
+        analyzing[ex] = false;
+      });
+    }
   }
 }, CACHE_TTL);
 

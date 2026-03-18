@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get('symbol');
-    const exchange = searchParams.get('exchange') as 'upbit' | 'bithumb';
+    const exchange = searchParams.get('exchange') as 'upbit' | 'bithumb' | 'bybit';
     const timeframe = searchParams.get('timeframe') || '1h'; // 기본값 1시간
 
     if (!symbol || !exchange) {
@@ -27,41 +27,42 @@ export async function GET(req: Request) {
     }
 
     // 캔들 데이터 가져오기
-    let candles;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let candles: any[];
     if (exchange === 'upbit') {
       const market = `KRW-${symbol}`;
       switch (timeframe) {
-        case '5m':
-          candles = await fetchUpbitCandles5M(market, 250);
-          break;
-        case '30m':
-          candles = await fetchUpbitCandles30M(market, 250);
-          break;
-        case '4h':
-          candles = await fetchUpbitCandles4H(market, 250);
-          break;
-        case '1d':
-          candles = await fetchUpbitCandles1D(market, 250);
-          break;
-        default: // '1h'
-          candles = await fetchUpbitCandles(market, 250);
+        case '5m':  candles = await fetchUpbitCandles5M(market, 250); break;
+        case '30m': candles = await fetchUpbitCandles30M(market, 250); break;
+        case '4h':  candles = await fetchUpbitCandles4H(market, 250); break;
+        case '1d':  candles = await fetchUpbitCandles1D(market, 250); break;
+        default:    candles = await fetchUpbitCandles(market, 250);
       }
+    } else if (exchange === 'bybit') {
+      const tfMap: Record<string, string> = { '5m': '5', '30m': '30', '1h': '60', '4h': '240', '1d': 'D' };
+      const interval = tfMap[timeframe] || '60';
+      const bybitSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
+      const res = await fetch(
+        `https://api.bybit.com/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${interval}&limit=250`,
+        { cache: 'no-store' }
+      );
+      const json = await res.json();
+      if (json.retCode !== 0 || !json.result?.list) throw new Error('Invalid response from Bybit');
+      candles = json.result.list.reverse().map((c: string[]) => ({
+        t:      Number(c[0]),
+        open:   parseFloat(c[1]),
+        high:   parseFloat(c[2]),
+        low:    parseFloat(c[3]),
+        close:  parseFloat(c[4]),
+        volume: parseFloat(c[5]),
+      }));
     } else {
       switch (timeframe) {
-        case '5m':
-          candles = await fetchBithumbCandles5M(symbol, 250);
-          break;
-        case '30m':
-          candles = await fetchBithumbCandles30M(symbol, 250);
-          break;
-        case '4h':
-          candles = await fetchBithumbCandles4H(symbol, 250);
-          break;
-        case '1d':
-          candles = await fetchBithumbCandles1D(symbol, 250);
-          break;
-        default: // '1h'
-          candles = await fetchBithumbCandles(symbol, 250);
+        case '5m':  candles = await fetchBithumbCandles5M(symbol, 250); break;
+        case '30m': candles = await fetchBithumbCandles30M(symbol, 250); break;
+        case '4h':  candles = await fetchBithumbCandles4H(symbol, 250); break;
+        case '1d':  candles = await fetchBithumbCandles1D(symbol, 250); break;
+        default:    candles = await fetchBithumbCandles(symbol, 250);
       }
     }
 

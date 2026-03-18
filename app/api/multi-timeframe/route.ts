@@ -1,11 +1,13 @@
 // app/api/multi-timeframe/route.ts
 import { NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const body = await req.text();
     const res = await fetch('https://api.maketruthy.com/api/multi-timeframe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: body || '{}',
       cache: 'no-store',
     });
 
