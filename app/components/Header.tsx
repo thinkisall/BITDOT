@@ -100,6 +100,12 @@ export default function Header() {
             LSTM 예측
           </Link>
           <Link
+            href="/about"
+            className={`whitespace-nowrap transition-colors ${pathname === "/about" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            서비스 소개
+          </Link>
+          <Link
             href="/premium"
             className={`whitespace-nowrap transition-colors ${pathname === "/premium" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -286,6 +292,17 @@ export default function Header() {
                 }`}
               >
                 LSTM 예측
+              </Link>
+              <Link
+                href="/about"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/about"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                서비스 소개
               </Link>
               <Link
                 href="/premium"
