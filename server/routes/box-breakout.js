@@ -195,8 +195,41 @@ function scoreSignal(signal, candles, ma50) {
   return score;
 }
 
+// ── BTC 변화율 조회 (분석 전 1회) ─────────────────────────────────────────
+async function fetchBtcChange(exchange, timeframe) {
+  try {
+    const candles =
+      exchange === 'bybit'
+        ? await fetchBybitCandles('BTC', timeframe, 3)
+        : await fetchBithumbCandles('BTC', timeframe);
+    if (candles.length < 2) return 0;
+    const prev = candles[candles.length - 2].close;
+    const curr = candles[candles.length - 1].close;
+    return prev > 0 ? ((curr - prev) / prev) * 100 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ── BTC 상대강도 계산 ────────────────────────────────────────────────────
+function calcBtcRelativeStrength(coinChange, btcChange) {
+  const rs = coinChange - btcChange;
+  let status;
+  if (btcChange * coinChange < 0) status = '역행';
+  else if (rs >= 3) status = '강한 독립';
+  else if (rs >= 1) status = '약한 독립';
+  else status = '시장 추종';
+
+  const score =
+    btcChange * coinChange < 0
+      ? Math.min(40 + Math.round(Math.abs(rs) * 6), 100)
+      : Math.min(Math.round(Math.abs(rs) * 10), 100);
+
+  return { btcDecouplingScore: score, btcRelativeStatus: status };
+}
+
 // ── 종목 분석 ───────────────────────────────────────────────────────────────
-async function analyzeSymbol(market, timeframe) {
+async function analyzeSymbol(market, timeframe, btcChange = 0) {
   try {
     const candles =
       market.exchange === 'upbit'   ? await fetchUpbitCandles(market.market, timeframe, 200) :
@@ -231,6 +264,11 @@ async function analyzeSymbol(market, timeframe) {
     const cloud = calcIchimoku(candles);
     const ichimokuAboveCloudCount = cloud && currentPrice > cloud.cloudTop ? 1 : 0;
 
+    // BTC 상대강도
+    const prevClose = candles.length >= 2 ? candles[candles.length - 2].close : currentPrice;
+    const coinChange = prevClose > 0 ? ((currentPrice - prevClose) / prevClose) * 100 : 0;
+    const { btcDecouplingScore, btcRelativeStatus } = calcBtcRelativeStrength(coinChange, btcChange);
+
     const signal = {
       symbol: market.symbol,
       exchange: market.exchange,
@@ -253,7 +291,8 @@ async function analyzeSymbol(market, timeframe) {
       volumeSurge,
       buySignal5m,
       ichimokuAboveCloudCount,
-      btcDecouplingScore: 50,
+      btcDecouplingScore,
+      btcRelativeStatus,
       analyzedAt: Date.now(),
     };
 
@@ -279,7 +318,10 @@ async function performAnalysis(timeframe, exchange = 'bithumb') {
   analyzingMap[key] = true;
   progressMap[key]  = { current: 0, total: 0 };
   try {
-    const markets = await getMarkets(exchange);
+    const [markets, btcChange] = await Promise.all([
+      getMarkets(exchange),
+      fetchBtcChange(exchange, timeframe),
+    ]);
     progressMap[key] = { current: 0, total: markets.length };
 
     const concurrency = exchange === 'bybit' ? 8 : 5;
@@ -288,7 +330,7 @@ async function performAnalysis(timeframe, exchange = 'bithumb') {
       await Promise.all(
         markets.map((m) =>
           limit(async () => {
-            const r = await analyzeSymbol(m, timeframe);
+            const r = await analyzeSymbol(m, timeframe, btcChange);
             progressMap[key].current++;
             return r;
           })

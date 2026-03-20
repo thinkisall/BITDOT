@@ -47,8 +47,12 @@ export function BTCStrengthPanel({
   // 분석할 심볼 목록
   const symbolsToAnalyze = useMemo(() => {
     return targetSignals.map((s) =>
-      s.symbol.replace("USDT", "").replace("/KRW", "")
-    );
+      s.symbol
+        .replace(/^KRW[-_]?/i, "")   // KRW-BTC → BTC
+        .replace(/[-_]?KRW$/i, "")   // BTCKRW, BTC_KRW → BTC
+        .replace(/USDT$/i, "")        // BTCUSDT → BTC
+        .toUpperCase()
+    ).filter(Boolean);
   }, [targetSignals]);
 
   const fetchData = useCallback(async () => {

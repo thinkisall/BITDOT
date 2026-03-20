@@ -25,6 +25,7 @@ const multiTimeframeRouter = require('./routes/multi-timeframe');
 const predictRouter        = require('./routes/predict');
 const lstmRouter           = require('./routes/lstm');
 const boxBreakoutRouter    = require('./routes/box-breakout');
+const maTrendRouter        = require('./routes/ma-trend');
 
 // API 라우트 등록
 app.use('/api/scan',            scanRouter);
@@ -34,6 +35,7 @@ app.use('/api/multi-timeframe', multiTimeframeRouter);
 app.use('/predict',             predictRouter);   // /predict/top100/result, /predict/top100/start
 app.use('/predict/lstm',        lstmRouter);      // /predict/lstm/top200/result, /predict/lstm/top200/start
 app.use('/api/box-breakout',    boxBreakoutRouter);
+app.use('/api/ma-trend',        maTrendRouter);
 
 // 헬스체크
 app.get('/health', (req, res) => {

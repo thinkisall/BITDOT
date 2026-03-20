@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Header from '../components/Header';
+import { signInWithGoogle } from '@/lib/firebase';
 
 interface PremiumRequestStatus {
   id: string;
@@ -14,19 +14,11 @@ interface PremiumRequestStatus {
 
 export default function PremiumPage() {
   const { user, loading, isPremium, premiumUntil } = useAuth();
-  const router = useRouter();
   const [depositorName, setDepositorName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentRequest, setCurrentRequest] = useState<PremiumRequestStatus | null>(null);
   const [isLoadingRequest, setIsLoadingRequest] = useState(false);
-
-  // 로그인 체크
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [user, loading, router]);
 
   // 신청 상태 조회
   useEffect(() => {
@@ -106,7 +98,7 @@ export default function PremiumPage() {
     });
   };
 
-  if (loading || isLoadingRequest) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="text-white">로딩 중...</div>
@@ -114,7 +106,70 @@ export default function PremiumPage() {
     );
   }
 
-  if (!user) return null;
+  // 비로그인 사용자: 요금제 안내 + 로그인 CTA
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-zinc-950">
+        <Header />
+        <main className="container mx-auto px-4 py-6 max-w-2xl">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-white mb-2">프리미엄 등록</h1>
+            <p className="text-sm text-zinc-400">무통장입금 방식으로 프리미엄 멤버십을 신청하세요</p>
+          </div>
+
+          {/* 가격 안내 */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6 mb-6">
+            <div className="text-center mb-6">
+              <div className="text-3xl font-bold text-yellow-500 mb-2">39,900원</div>
+              <div className="text-sm text-zinc-400">1개월 (30일)</div>
+            </div>
+            <div className="border-t border-zinc-800 pt-4 space-y-3">
+              <h3 className="text-sm font-bold text-white mb-2">프리미엄 혜택</h3>
+              <ul className="space-y-2 text-sm text-zinc-300">
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 mt-0.5">•</span>
+                  <span>1-2페이지 상위 종목 데이터 무제한 열람</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 mt-0.5">•</span>
+                  <span>실시간 시장 분석 데이터 제공</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 mt-0.5">•</span>
+                  <span>고급 차트 및 기술적 지표 활용</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 로그인 유도 */}
+          <div className="bg-zinc-900 rounded-lg border border-yellow-500/30 p-6 text-center">
+            <p className="text-sm text-zinc-300 mb-4">프리미엄을 신청하려면 로그인이 필요합니다</p>
+            <button
+              onClick={() => signInWithGoogle()}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-zinc-900 font-bold rounded-lg hover:bg-zinc-100 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Google로 로그인
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (isLoadingRequest) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-white">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950">
