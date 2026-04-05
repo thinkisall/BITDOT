@@ -21,7 +21,8 @@
       "Bash(lsof:*)",
       "Bash(xargs kill -9)",
       "Bash(kill:*)",
-      "Bash(/home/thinkisall/trading_env/bin/uvicorn:*)"
+      "Bash(/home/thinkisall/trading_env/bin/uvicorn:*)",
+      "Bash(brew list:*)"
     ]
   }
 }

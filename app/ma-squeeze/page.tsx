@@ -48,6 +48,12 @@ function formatVolume(vol: number, exchange: string): string {
   return vol.toFixed(0);
 }
 
+const EXCHANGE_STYLE: Record<string, { label: string; color: string }> = {
+  upbit:   { label: '업비트', color: 'text-purple-400' },
+  bithumb: { label: '빗썸',   color: 'text-blue-400'   },
+  bybit:   { label: 'Bybit',  color: 'text-yellow-400' },
+};
+
 export default function MaSqueezePage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,11 +90,11 @@ export default function MaSqueezePage() {
 
   const counts = result?.countByExchange ?? { upbit: 0, bithumb: 0, bybit: 0 };
 
-  const tabs: { key: TabType; label: string; color: string; activeColor: string }[] = [
-    { key: 'all',     label: `전체 ${result?.matchedCount ?? 0}`,  color: 'text-zinc-500', activeColor: 'bg-zinc-700 text-white' },
-    { key: 'upbit',   label: `업비트 ${counts.upbit}`,             color: 'text-zinc-500', activeColor: 'bg-purple-500/20 text-purple-400 border border-purple-500/40' },
-    { key: 'bithumb', label: `빗썸 ${counts.bithumb}`,             color: 'text-zinc-500', activeColor: 'bg-blue-500/20 text-blue-400 border border-blue-500/40' },
-    { key: 'bybit',   label: `Bybit ${counts.bybit}`,              color: 'text-zinc-500', activeColor: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' },
+  const tabs: { key: TabType; label: string; activeColor: string }[] = [
+    { key: 'all',     label: `전체 ${result?.matchedCount ?? 0}`, activeColor: 'bg-zinc-700 text-white' },
+    { key: 'upbit',   label: `업비트 ${counts.upbit}`,            activeColor: 'bg-purple-500/20 text-purple-400 border border-purple-500/40' },
+    { key: 'bithumb', label: `빗썸 ${counts.bithumb}`,            activeColor: 'bg-blue-500/20 text-blue-400 border border-blue-500/40' },
+    { key: 'bybit',   label: `Bybit ${counts.bybit}`,             activeColor: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' },
   ];
 
   return (
@@ -97,25 +103,19 @@ export default function MaSqueezePage() {
 
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-5xl">
 
-        {/* 헤더 */}
-        <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                  5분봉
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                  MA 수렴
-                </span>
+        {/* 헤더 카드 */}
+        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">5분봉</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">MA 수렴</span>
               </div>
-              <h1 className="text-lg sm:text-xl font-bold text-white">
-                MA 스퀴즈 스캐너
-              </h1>
-              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                5분봉 현재가가 <span className="text-cyan-400">MA50 위</span>에 있으면서,{' '}
-                <span className="text-purple-400">MA50·MA110·MA180이 3% 이내로 수렴</span>된 종목 탐지
-                — 업비트·빗썸·Bybit 각 300개 스캔
+              <h1 className="text-base sm:text-xl font-bold text-white">MA 스퀴즈 스캐너</h1>
+              <p className="text-[11px] sm:text-xs text-zinc-400 mt-1 leading-relaxed">
+                현재가 <span className="text-cyan-400">MA50 위</span> &amp;{' '}
+                <span className="text-purple-400">MA50·110·180 수렴 3% 이내</span>
+                <span className="text-zinc-600"> · 업비트·빗썸·Bybit 각 300개</span>
               </p>
             </div>
             <button
@@ -124,33 +124,25 @@ export default function MaSqueezePage() {
               className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
             >
               {loading ? (
-                <>
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  스캔 중...
-                </>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
               ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  새로고침
-                </>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               )}
+              <span className="hidden sm:inline">{loading ? '스캔 중...' : '새로고침'}</span>
             </button>
           </div>
 
-          {/* 스캔 결과 요약 */}
           {result && (
-            <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-4 text-xs text-zinc-500">
-              <span>스캔: <span className="text-zinc-300">{result.scannedCount.toLocaleString()}개</span></span>
-              <span>조건 충족: <span className="text-cyan-400 font-bold">{result.matchedCount}개</span></span>
-              <span>수렴 기준: <span className="text-zinc-300">{result.threshold}% 이내</span></span>
-              {lastFetched && (
-                <span>갱신: <span className="text-zinc-300">{lastFetched.toLocaleTimeString('ko-KR')}</span></span>
-              )}
+            <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+              <span>스캔 <span className="text-zinc-300">{result.scannedCount.toLocaleString()}</span></span>
+              <span>충족 <span className="text-cyan-400 font-bold">{result.matchedCount}</span></span>
+              <span>기준 <span className="text-zinc-300">{result.threshold}%</span></span>
+              {lastFetched && <span>갱신 <span className="text-zinc-300">{lastFetched.toLocaleTimeString('ko-KR')}</span></span>}
               {result.fromCache && <span className="text-yellow-500/70">캐시</span>}
             </div>
           )}
@@ -170,18 +162,18 @@ export default function MaSqueezePage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
             </svg>
-            <p className="text-sm text-zinc-400">전종목 스캔 중... 잠시만 기다려주세요</p>
+            <p className="text-sm text-zinc-400">전종목 스캔 중...</p>
           </div>
         )}
 
         {/* 탭 */}
         {result && (
-          <div className="mb-3 flex gap-2 flex-wrap">
+          <div className="mb-3 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   activeTab === tab.key ? tab.activeColor : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -194,7 +186,16 @@ export default function MaSqueezePage() {
         {/* 결과 테이블 */}
         {filteredItems.length > 0 && (
           <div className="rounded-xl border border-zinc-800 overflow-hidden">
-            <div className="grid grid-cols-[1fr_90px_80px_80px_80px_60px_60px_65px] gap-0 bg-zinc-900 px-3 py-2 text-[10px] sm:text-xs text-zinc-500 font-medium border-b border-zinc-800">
+
+            {/* 모바일 헤더 (sm 미만) */}
+            <div className="grid grid-cols-[1fr_80px_65px] sm:hidden bg-zinc-900 px-3 py-2 text-[10px] text-zinc-500 font-medium border-b border-zinc-800">
+              <span>종목</span>
+              <span className="text-right">현재가</span>
+              <span className="text-right">등락률</span>
+            </div>
+
+            {/* 데스크탑 헤더 (sm 이상) */}
+            <div className="hidden sm:grid grid-cols-[1fr_90px_80px_80px_80px_60px_60px_65px] bg-zinc-900 px-3 py-2 text-xs text-zinc-500 font-medium border-b border-zinc-800">
               <span>종목</span>
               <span className="text-right">현재가</span>
               <span className="text-right text-cyan-400">MA50</span>
@@ -206,65 +207,72 @@ export default function MaSqueezePage() {
             </div>
 
             <div className="divide-y divide-zinc-800/60">
-              {filteredItems.map((item, idx) => (
-                <div
-                  key={`${item.exchange}-${item.symbol}`}
-                  className="grid grid-cols-[1fr_90px_80px_80px_80px_60px_60px_65px] gap-0 px-3 py-2.5 hover:bg-zinc-900/60 transition-colors cursor-pointer"
-                  onClick={() => setSelectedItem(item)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] text-zinc-600 w-5 shrink-0">{idx + 1}</span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-white truncate">{item.symbol}</div>
-                      <div className={`text-[10px] font-medium ${
-                        item.exchange === 'upbit' ? 'text-purple-400' :
-                        item.exchange === 'bybit' ? 'text-yellow-400' : 'text-blue-400'
-                      }`}>
-                        {item.exchange === 'upbit' ? '업비트' : item.exchange === 'bybit' ? 'Bybit' : '빗썸'}
+              {filteredItems.map((item, idx) => {
+                const exStyle = EXCHANGE_STYLE[item.exchange] ?? { label: item.exchange, color: 'text-zinc-400' };
+                const changeColor = item.changeRate > 5 ? 'text-red-400' : item.changeRate > 0 ? 'text-rose-300' : item.changeRate < -5 ? 'text-blue-400' : 'text-sky-300';
+
+                return (
+                  <div
+                    key={`${item.exchange}-${item.symbol}`}
+                    onClick={() => setSelectedItem(item)}
+                    className="cursor-pointer hover:bg-zinc-900/60 active:bg-zinc-800/80 transition-colors"
+                  >
+                    {/* 모바일 행 */}
+                    <div className="grid grid-cols-[1fr_80px_65px] sm:hidden px-3 py-3 gap-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] text-zinc-600 w-4 shrink-0">{idx + 1}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{item.symbol}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`text-[10px] font-medium ${exStyle.color}`}>{exStyle.label}</span>
+                            <span className="text-[10px] text-zinc-600">수렴 {item.spreadPct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right self-center">
+                        <div className="text-xs font-medium text-white">{formatPrice(item.currentPrice)}</div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">MA50 {formatPrice(item.ma50)}</div>
+                      </div>
+                      <div className="text-right self-center">
+                        <span className={`text-sm font-bold ${changeColor}`}>
+                          {item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(2)}%
+                        </span>
+                        <div className="text-[10px] text-green-400 mt-0.5">+{item.priceAboveMa50Pct}%↑</div>
+                      </div>
+                    </div>
+
+                    {/* 데스크탑 행 */}
+                    <div className="hidden sm:grid grid-cols-[1fr_90px_80px_80px_80px_60px_60px_65px] px-3 py-2.5 gap-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] text-zinc-600 w-5 shrink-0">{idx + 1}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{item.symbol}</div>
+                          <div className={`text-[10px] font-medium ${exStyle.color}`}>{exStyle.label}</div>
+                        </div>
+                      </div>
+                      <div className="text-right self-center">
+                        <div className="text-xs font-medium text-white">{formatPrice(item.currentPrice)}</div>
+                      </div>
+                      <div className="text-right self-center text-xs text-cyan-400">{formatPrice(item.ma50)}</div>
+                      <div className="text-right self-center text-xs text-purple-400">{formatPrice(item.ma110)}</div>
+                      <div className="text-right self-center text-xs text-orange-400">{formatPrice(item.ma180)}</div>
+                      <div className="text-right self-center">
+                        <span className={`text-xs font-bold ${item.spreadPct < 1 ? 'text-green-400' : item.spreadPct < 2 ? 'text-yellow-400' : 'text-zinc-300'}`}>
+                          {item.spreadPct}%
+                        </span>
+                      </div>
+                      <div className="text-right self-center">
+                        <span className="text-xs text-green-400">+{item.priceAboveMa50Pct}%</span>
+                      </div>
+                      <div className="text-right self-center">
+                        <span className={`text-xs font-bold ${changeColor}`}>
+                          {item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(2)}%
+                        </span>
                       </div>
                     </div>
                   </div>
-
-                  <div className="text-right self-center">
-                    <div className="text-xs font-medium text-white">{formatPrice(item.currentPrice)}</div>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <div className="text-xs text-cyan-400">{formatPrice(item.ma50)}</div>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <div className="text-xs text-purple-400">{formatPrice(item.ma110)}</div>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <div className="text-xs text-orange-400">{formatPrice(item.ma180)}</div>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <span className={`text-xs font-bold ${
-                      item.spreadPct < 1 ? 'text-green-400' :
-                      item.spreadPct < 2 ? 'text-yellow-400' : 'text-zinc-300'
-                    }`}>
-                      {item.spreadPct}%
-                    </span>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <span className="text-xs text-green-400">+{item.priceAboveMa50Pct}%</span>
-                  </div>
-
-                  <div className="text-right self-center">
-                    <span className={`text-xs font-bold ${
-                      item.changeRate > 5 ? 'text-red-400' :
-                      item.changeRate > 0 ? 'text-rose-300' :
-                      item.changeRate < -5 ? 'text-blue-400' : 'text-sky-300'
-                    }`}>
-                      {item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -276,7 +284,6 @@ export default function MaSqueezePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-sm">조건을 충족하는 종목이 없습니다.</p>
-            <p className="text-xs text-zinc-600">MA 수렴 기준({result.threshold}%)을 높이거나 나중에 다시 시도해보세요.</p>
           </div>
         )}
 
@@ -298,12 +305,8 @@ export default function MaSqueezePage() {
         {/* 범례 */}
         <div className="mt-4 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50">
           <p className="text-[10px] text-zinc-600 leading-relaxed">
-            <span className="text-cyan-400">MA50</span> ·{' '}
-            <span className="text-purple-400">MA110</span> ·{' '}
-            <span className="text-orange-400">MA180</span> — 5분봉 이동평균선 ·{' '}
-            <span className="text-white">수렴도</span>: 세 선의 최대-최소 / 평균 비율 (낮을수록 수렴) ·{' '}
-            <span className="text-white">MA위</span>: 현재가가 MA50 대비 얼마나 위에 있는지 ·{' '}
-            업비트·빗썸·Bybit 거래량 기준 각 300종목 · 5분마다 자동 갱신
+            <span className="text-cyan-400">MA50</span> · <span className="text-purple-400">MA110</span> · <span className="text-orange-400">MA180</span> — 5분봉 이동평균선 ·
+            수렴도: 세 선의 최대-최소 / 평균 비율 · MA위: 현재가가 MA50 대비 위 비율 · 5분마다 자동 갱신
           </p>
         </div>
 

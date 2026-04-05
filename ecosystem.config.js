@@ -36,7 +36,7 @@ module.exports = {
     // ── Cloudflare Tunnel (api.maketruthy.com → localhost:8000) ──────────
     {
       name: 'bitdot-tunnel',
-      script: 'cloudflared',
+      script: '/opt/homebrew/bin/cloudflared',
       args: 'tunnel --no-autoupdate run --token ' + (process.env.CLOUDFLARE_TUNNEL_TOKEN || ''),
       cwd: __dirname,
       instances: 1,
