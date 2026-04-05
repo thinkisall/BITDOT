@@ -4,21 +4,48 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { symbol, exchange } = req.query;
+    const { symbol, exchange, timeframe = '1h' } = req.query;
 
     if (!symbol || !exchange) {
       return res.status(400).json({ error: 'Missing parameters' });
     }
 
-    console.log(`[Chart] Fetching ${exchange}:${symbol}`);
+    console.log(`[Chart] Fetching ${exchange}:${symbol} (${timeframe})`);
+
+    // 타임프레임 매핑
+    const upbitTfMap = {
+      '5m':  'minutes/5',
+      '15m': 'minutes/15',
+      '30m': 'minutes/30',
+      '1h':  'minutes/60',
+      '4h':  'minutes/240',
+      '1d':  'days',
+    };
+    const bithumbTfMap = {
+      '5m':  '5m',
+      '15m': '15m',
+      '30m': '30m',
+      '1h':  '1h',
+      '4h':  '4h',
+      '1d':  '24h',
+    };
+    const bybitTfMap = {
+      '5m':  '5',
+      '15m': '15',
+      '30m': '30',
+      '1h':  '60',
+      '4h':  '240',
+      '1d':  'D',
+    };
 
     // 캔들 데이터 fetch
     let candles = [];
 
     if (exchange === 'upbit') {
       const market = `KRW-${symbol}`;
+      const tf = upbitTfMap[timeframe] || 'minutes/60';
       const response = await fetch(
-        `https://api.upbit.com/v1/candles/minutes/60?market=${market}&count=250`
+        `https://api.upbit.com/v1/candles/${tf}?market=${market}&count=250`
       );
       const data = await response.json();
 
@@ -29,21 +56,39 @@ router.get('/', async (req, res) => {
         low: c.low_price,
         close: c.trade_price,
       })).reverse();
+    } else if (exchange === 'bybit') {
+      // 바이비트 캔들 데이터
+      const tf = bybitTfMap[timeframe] || '60';
+      const response = await fetch(
+        `https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${tf}&limit=250`
+      );
+      const data = await response.json();
+
+      if (data.retCode === 0 && data.result?.list) {
+        candles = data.result.list.reverse().map(c => ({
+          time: Math.floor(Number(c[0]) / 1000),
+          open: parseFloat(c[1]),
+          high: parseFloat(c[2]),
+          low: parseFloat(c[3]),
+          close: parseFloat(c[4]),
+        }));
+      }
     } else {
       // 빗썸 캔들 데이터
+      const tf = bithumbTfMap[timeframe] || '1h';
       const response = await fetch(
-        `https://api.bithumb.com/public/candlestick/${symbol}_KRW/1h`
+        `https://api.bithumb.com/public/candlestick/${symbol}_KRW/${tf}`
       );
       const data = await response.json();
 
       if (data.status === '0000' && data.data) {
-        candles = data.data.slice(0, 250).map(c => ({
+        candles = data.data.slice(-250).map(c => ({
           time: Math.floor(c[0] / 1000),
           open: parseFloat(c[1]),
           high: parseFloat(c[3]),
           low: parseFloat(c[4]),
           close: parseFloat(c[2]),
-        })).reverse();
+        }));
       }
     }
 

@@ -26,6 +26,8 @@ const predictRouter        = require('./routes/predict');
 const lstmRouter           = require('./routes/lstm');
 const boxBreakoutRouter    = require('./routes/box-breakout');
 const maTrendRouter        = require('./routes/ma-trend');
+const maSqueezeRouter      = require('./routes/ma-squeeze');
+const maReverseRouter      = require('./routes/ma-reverse');
 
 // API 라우트 등록
 app.use('/api/scan',            scanRouter);
@@ -36,6 +38,8 @@ app.use('/predict',             predictRouter);   // /predict/top100/result, /pr
 app.use('/predict/lstm',        lstmRouter);      // /predict/lstm/top200/result, /predict/lstm/top200/start
 app.use('/api/box-breakout',    boxBreakoutRouter);
 app.use('/api/ma-trend',        maTrendRouter);
+app.use('/api/ma-squeeze',     maSqueezeRouter);
+app.use('/api/ma-reverse',    maReverseRouter);
 
 // 헬스체크
 app.get('/health', (req, res) => {

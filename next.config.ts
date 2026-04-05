@@ -11,13 +11,9 @@ const nextConfig: NextConfig = {
             "https://api.maketruthy.com/api/:path*",
         },
       ],
-      // beforeFiles: funding API는 지역 제한 우회를 위해 외부 서버로 프록시
-      beforeFiles: [
-        {
-          source: "/api/funding",
-          destination: "https://api.maketruthy.com/api/funding",
-        },
-      ],
+      // beforeFiles: /api/funding 은 route.ts → localhost:8000 직접 프록시로 처리
+      // (Cloudflare 터널 경유 시 외부 API 응답 지연으로 530 발생)
+      beforeFiles: [],
       fallback: [],
     };
   },

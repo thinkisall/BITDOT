@@ -40,34 +40,16 @@ export default function Header() {
             홈
           </Link>
           <Link
-            href="/analysis"
-            className={`whitespace-nowrap transition-colors ${pathname === "/analysis" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            분석
-          </Link>
-          <Link
-            href="/divergence"
-            className={`whitespace-nowrap transition-colors ${pathname === "/divergence" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            MA50
-          </Link>
-          <Link
-            href="/rsi-scanner"
-            className={`whitespace-nowrap transition-colors ${pathname === "/rsi-scanner" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            RSI
-          </Link>
-          <Link
-            href="/volume-scanner"
-            className={`whitespace-nowrap transition-colors ${pathname === "/volume-scanner" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            거래량 스캐너
-          </Link>
-          <Link
             href="/box-breakout"
             className={`whitespace-nowrap transition-colors ${pathname === "/box-breakout" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
             돌파분석
+          </Link>
+          <Link
+            href="/ma-squeeze"
+            className={`whitespace-nowrap transition-colors ${pathname === "/ma-squeeze" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            MA스퀴즈
           </Link>
           <Link
             href="/funding"
@@ -86,18 +68,6 @@ export default function Header() {
             className={`whitespace-nowrap transition-colors ${pathname?.startsWith("/board") ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
             게시판
-          </Link>
-          <Link
-            href="/predict"
-            className={`whitespace-nowrap transition-colors ${pathname === "/predict" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            AI 예측
-          </Link>
-          <Link
-            href="/lstm"
-            className={`whitespace-nowrap transition-colors ${pathname === "/lstm" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
-          >
-            LSTM 예측
           </Link>
           <Link
             href="/about"
@@ -184,50 +154,6 @@ export default function Header() {
                 홈
               </Link>
               <Link
-                href="/analysis"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/analysis"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                분석
-              </Link>
-              <Link
-                href="/divergence"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/divergence"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                MA50 스캐너
-              </Link>
-              <Link
-                href="/rsi-scanner"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/rsi-scanner"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                RSI 스캐너
-              </Link>
-              <Link
-                href="/volume-scanner"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/volume-scanner"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                거래량 스캐너
-              </Link>
-              <Link
                 href="/box-breakout"
                 onClick={closeMenu}
                 className={`px-4 py-3 rounded-lg transition-colors ${
@@ -237,6 +163,17 @@ export default function Header() {
                 }`}
               >
                 돌파 분석
+              </Link>
+              <Link
+                href="/ma-squeeze"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/ma-squeeze"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                MA 스퀴즈
               </Link>
               <Link
                 href="/funding"
@@ -270,28 +207,6 @@ export default function Header() {
                 }`}
               >
                 게시판
-              </Link>
-              <Link
-                href="/predict"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/predict"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                AI 예측
-              </Link>
-              <Link
-                href="/lstm"
-                onClick={closeMenu}
-                className={`px-4 py-3 rounded-lg transition-colors ${
-                  pathname === "/lstm"
-                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                LSTM 예측
               </Link>
               <Link
                 href="/about"
