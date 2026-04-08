@@ -25,7 +25,6 @@ const firebaseConfig = {
 const isNewApp = getApps().length === 0;
 const app = isNewApp ? initializeApp(firebaseConfig) : getApps()[0];
 
-// 이미 초기화된 경우 getAuth 사용 (중복 initializeAuth 방지)
 const auth = isNewApp
   ? initializeAuth(app, {
       persistence: [indexedDBLocalPersistence, browserLocalPersistence],
@@ -35,16 +34,23 @@ const auth = isNewApp
 
 const googleProvider = new GoogleAuthProvider();
 
-function isMobile(): boolean {
+// iOS Safari는 ITP로 인해 redirect 시 IndexedDB가 초기화됨 → popup 사용
+// Android Chrome은 redirect 정상 동작
+function isAndroid(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  return /Android/i.test(navigator.userAgent);
 }
 
-// 모바일: redirect / 데스크톱: popup
+export function isAndroidDevice(): boolean {
+  return isAndroid();
+}
+
 export const signInWithGoogle = () => {
-  if (isMobile()) {
+  if (isAndroid()) {
+    // Android: redirect 방식 (popup이 새 창으로 열릴 수 있어 redirect가 더 안정적)
     return signInWithRedirect(auth, googleProvider, browserPopupRedirectResolver);
   }
+  // iOS Safari & 데스크톱: popup (Safari는 새 탭으로 열어줌)
   return signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
 };
 
