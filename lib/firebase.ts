@@ -1,6 +1,13 @@
 // lib/firebase.ts
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut as firebaseSignOut,
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,8 +25,17 @@ const auth = getAuth(app);
 // Google provider
 const googleProvider = new GoogleAuthProvider();
 
-// Auth functions
-export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
-export const signOut = () => firebaseSignOut(auth);
+// 모바일 여부 판단
+function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
 
-export { auth };
+// 모바일 → redirect, 데스크탑 → popup
+export const signInWithGoogle = () =>
+  isMobile()
+    ? signInWithRedirect(auth, googleProvider)
+    : signInWithPopup(auth, googleProvider);
+
+export { getRedirectResult, auth };
+export const signOut = () => firebaseSignOut(auth);

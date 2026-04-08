@@ -22,7 +22,6 @@ interface SqueezeItem {
   ma50_4h: number;
   ma110_4h: number;
   ma180_4h: number;
-  // 박스권
   hasBox: boolean;
   boxTop: number | null;
   boxBottom: number | null;
@@ -65,10 +64,10 @@ function formatVolume(vol: number, exchange: string): string {
   return vol.toFixed(0);
 }
 
-const EXCHANGE_STYLE: Record<string, { label: string; color: string }> = {
-  upbit:   { label: '업비트', color: 'text-purple-400' },
-  bithumb: { label: '빗썸',   color: 'text-blue-400'   },
-  bybit:   { label: 'Bybit',  color: 'text-yellow-400' },
+const EXCHANGE_STYLE: Record<string, { label: string; color: string; bg: string }> = {
+  upbit:   { label: '업비트', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  bithumb: { label: '빗썸',   color: 'text-blue-400',   bg: 'bg-blue-500/10'   },
+  bybit:   { label: 'Bybit',  color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
 };
 
 function CloudBadge({ above, label }: { above: boolean; label: string }) {
@@ -119,7 +118,6 @@ export default function MaSqueezePage() {
 
   useEffect(() => {
     fetchData();
-    // 스캔 중이면 10초마다 폴링, 완료 후엔 3분마다 갱신
     const interval = setInterval(() => {
       fetchData();
     }, result?.isAnalyzing ? 10_000 : 3 * 60 * 1000);
@@ -156,29 +154,26 @@ export default function MaSqueezePage() {
     return (
       <div className="min-h-screen bg-zinc-950">
         <Header />
-        <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-5xl">
-          {/* 흐릿한 미리보기 */}
+        <main className="container mx-auto px-4 py-8 max-w-5xl">
           <div className="pointer-events-none select-none blur-sm opacity-30 space-y-2">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-14 rounded-xl bg-zinc-800 animate-pulse" />
+              <div key={i} className="h-16 rounded-xl bg-zinc-800 animate-pulse" />
             ))}
           </div>
-
-          {/* 프리미엄 게이트 오버레이 */}
-          <div className="flex items-center justify-center -mt-55">
-            <div className="text-center bg-zinc-900/95 backdrop-blur-md border border-emerald-500/30 rounded-2xl px-8 py-10 shadow-2xl max-w-sm w-full mx-4">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-center -mt-52">
+            <div className="text-center bg-zinc-900/95 backdrop-blur-md border border-emerald-500/30 rounded-2xl px-6 py-8 shadow-2xl w-full max-w-xs mx-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-white mb-2">구름대 위 정배열 스캐너</h3>
-              <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              <h3 className="text-base font-bold text-white mb-2">구름대 위 정배열 스캐너</h3>
+              <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
                 이 기능은 <span className="text-emerald-400 font-semibold">프리미엄 회원</span>만<br />이용할 수 있습니다.
               </p>
               <button
                 onClick={() => router.push('/premium')}
-                className="w-full py-3 rounded-xl bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm hover:from-emerald-500 hover:to-emerald-400 transition-all shadow-lg shadow-emerald-500/25 mb-3"
+                className="w-full py-2.5 rounded-xl bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm hover:from-emerald-500 hover:to-emerald-400 transition-all mb-2.5"
               >
                 프리미엄 구독하기
               </button>
@@ -204,26 +199,26 @@ export default function MaSqueezePage() {
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-5xl">
 
         {/* 헤더 카드 */}
-        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900 p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">일목구름</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">정배열</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 border border-zinc-600">거래량순</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 border border-zinc-600">박스권</span>
               </div>
-              <h1 className="text-base sm:text-xl font-bold text-white">구름대 위 정배열 스캐너</h1>
-              <p className="text-[11px] sm:text-xs text-zinc-400 mt-1 leading-relaxed">
-                <span className="text-zinc-300">①</span> 일봉·4h 중 하나라도 구름 위{' '}
-                → <span className="text-zinc-300">②</span> 1h·4h <span className="text-emerald-400">모두 구름 위</span>{' '}
-                + <span className="text-cyan-400">MA 정배열</span>
-                <span className="text-zinc-600"> · 거래대금 내림차순</span>
+              <h1 className="text-sm sm:text-xl font-bold text-white">구름대 위 정배열 스캐너</h1>
+              <p className="text-[10px] sm:text-xs text-zinc-400 mt-1 leading-relaxed">
+                <span className="text-zinc-300">①</span> 일봉·4h 구름 위{' '}
+                → <span className="text-zinc-300">②</span> 1h·4h <span className="text-emerald-400">구름 위</span>{' '}
+                + <span className="text-cyan-400">MA정배열</span>
+                {' '}+ <span className="text-amber-400">박스권 분석</span>
               </p>
             </div>
             <button
               onClick={fetchData}
               disabled={loading}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
             >
               {loading ? (
                 <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -240,23 +235,24 @@ export default function MaSqueezePage() {
           </div>
 
           {result && (
-            <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+            <div className="mt-2.5 pt-2.5 border-t border-zinc-800 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500">
               <span>스캔 <span className="text-zinc-300">{result.scannedCount.toLocaleString()}</span></span>
               <span>충족 <span className="text-emerald-400 font-bold">{result.matchedCount}</span></span>
               {lastFetched && <span>갱신 <span className="text-zinc-300">{lastFetched.toLocaleTimeString('ko-KR')}</span></span>}
-              {result.fromCache && <span className="text-yellow-500/70">캐시</span>}
+              {result.isAnalyzing && <span className="text-yellow-500/70 animate-pulse">스캔 중...</span>}
+              {result.fromCache && !result.isAnalyzing && <span className="text-zinc-600">캐시</span>}
             </div>
           )}
         </div>
 
         {/* 에러 */}
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-950/40 border border-red-800/50 text-red-400 text-sm">
+          <div className="mb-4 p-3 rounded-lg bg-red-950/40 border border-red-800/50 text-red-400 text-xs sm:text-sm">
             {error}
           </div>
         )}
 
-        {/* 로딩 */}
+        {/* 초기 로딩 */}
         {loading && !result && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <svg className="w-8 h-8 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
@@ -284,82 +280,114 @@ export default function MaSqueezePage() {
           </div>
         )}
 
-        {/* 결과 테이블 */}
+        {/* ── 모바일: 카드 리스트 ── */}
         {filteredItems.length > 0 && (
-          <div className="rounded-xl border border-zinc-800 overflow-hidden">
-
-            {/* 모바일 헤더 */}
-            <div className="grid grid-cols-[1fr_80px_70px_55px] sm:hidden bg-zinc-900 px-3 py-2 text-[10px] text-zinc-500 font-medium border-b border-zinc-800">
-              <span>종목</span>
-              <span className="text-right">거래대금</span>
-              <span className="text-center">박스권</span>
-              <span className="text-right">등락률</span>
-            </div>
-
-            {/* 데스크탑 헤더 */}
-            <div className="hidden sm:grid grid-cols-[1fr_95px_55px_55px_55px_100px_120px_65px] bg-zinc-900 px-3 py-2 text-xs text-zinc-500 font-medium border-b border-zinc-800">
-              <span>종목</span>
-              <span className="text-right">거래대금</span>
-              <span className="text-right text-cyan-400">MA50</span>
-              <span className="text-right text-purple-400">MA110</span>
-              <span className="text-right text-orange-400">MA180</span>
-              <span className="text-center">구름대</span>
-              <span className="text-center">박스권</span>
-              <span className="text-right">등락률</span>
-            </div>
-
-            <div className="divide-y divide-zinc-800/60">
+          <>
+            {/* 모바일 카드 */}
+            <div className="sm:hidden space-y-2">
               {filteredItems.map((item, idx) => {
-                const exStyle = EXCHANGE_STYLE[item.exchange] ?? { label: item.exchange, color: 'text-zinc-400' };
-                const changeColor = item.changeRate > 5 ? 'text-red-400' : item.changeRate > 0 ? 'text-rose-300' : item.changeRate < -5 ? 'text-blue-400' : 'text-sky-300';
+                const exStyle = EXCHANGE_STYLE[item.exchange] ?? { label: item.exchange, color: 'text-zinc-400', bg: 'bg-zinc-800' };
+                const changeColor = item.changeRate > 0 ? 'text-red-400' : 'text-blue-400';
+                const changeSign = item.changeRate > 0 ? '+' : '';
 
                 return (
                   <div
                     key={`${item.exchange}-${item.symbol}`}
                     onClick={() => setSelectedItem(item)}
-                    className="cursor-pointer hover:bg-zinc-900/60 active:bg-zinc-800/80 transition-colors"
+                    className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 active:bg-zinc-800 transition-colors cursor-pointer"
                   >
-                    {/* 모바일 행 */}
-                    <div className="grid grid-cols-[1fr_80px_70px_55px] sm:hidden px-3 py-3">
+                    {/* 1행: 순위 + 심볼 + 뱃지 + 등락률 */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] text-zinc-600 w-4 shrink-0">{idx + 1}</span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-white truncate">{item.symbol}</span>
-                            {item.score >= 6 && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">A</span>}
-                            {item.isBreakout && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">돌파</span>}
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                            <span className={`text-[10px] font-medium ${exStyle.color}`}>{exStyle.label}</span>
-                            <CloudBadge above={item.aboveCloud1d} label="일" />
-                            <CloudBadge above={item.aboveCloud4h} label="4h" />
-                            <CloudBadge above={item.aboveCloud1h} label="1h" />
-                          </div>
+                        <span className="text-[11px] text-zinc-600 shrink-0 w-5 text-center">{idx + 1}</span>
+                        <span className="text-base font-bold text-white truncate">{item.symbol}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {item.score >= 6 && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">A</span>
+                          )}
+                          {item.isBreakout && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">돌파</span>
+                          )}
+                          {item.volumeSurge && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">V</span>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right self-center">
-                        <div className="text-xs font-medium text-white">{formatVolume(item.volume, item.exchange)}</div>
-                        <div className="text-[10px] text-zinc-500 mt-0.5">{formatPrice(item.currentPrice)}</div>
-                      </div>
-                      <div className="self-center flex flex-col items-center gap-0.5">
-                        {item.hasBox ? (
-                          <>
-                            <BoxPositionBar positionInBox={item.positionInBox!} isBreakout={item.isBreakout} />
-                            <span className="text-[9px] text-zinc-500">{item.positionInBox!.toFixed(0)}%</span>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-zinc-700">-</span>
-                        )}
-                      </div>
-                      <div className="text-right self-center">
-                        <span className={`text-sm font-bold ${changeColor}`}>
-                          {item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(2)}%
+                      <span className={`text-base font-bold shrink-0 ${changeColor}`}>
+                        {changeSign}{item.changeRate.toFixed(2)}%
+                      </span>
+                    </div>
+
+                    {/* 2행: 거래소 + 구름뱃지 + 현재가 + 거래대금 */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${exStyle.bg} ${exStyle.color}`}>
+                          {exStyle.label}
                         </span>
+                        <CloudBadge above={item.aboveCloud1d} label="일" />
+                        <CloudBadge above={item.aboveCloud4h} label="4h" />
+                        <CloudBadge above={item.aboveCloud1h} label="1h" />
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-medium text-white">{formatPrice(item.currentPrice)}</div>
+                        <div className="text-[10px] text-zinc-500">{formatVolume(item.volume, item.exchange)}</div>
                       </div>
                     </div>
 
-                    {/* 데스크탑 행 */}
-                    <div className="hidden sm:grid grid-cols-[1fr_95px_55px_55px_55px_100px_120px_65px] px-3 py-2.5">
+                    {/* 3행: MA 정보 */}
+                    <div className="flex items-center gap-3 mb-2 text-[10px]">
+                      <span className="text-zinc-600">1h MA</span>
+                      <span className="text-cyan-400">{formatPrice(item.ma50_1h)}</span>
+                      <span className="text-zinc-700">·</span>
+                      <span className="text-purple-400">{formatPrice(item.ma110_1h)}</span>
+                      <span className="text-zinc-700">·</span>
+                      <span className="text-orange-400">{formatPrice(item.ma180_1h)}</span>
+                    </div>
+
+                    {/* 4행: 박스권 */}
+                    {item.hasBox ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-500 shrink-0">박스</span>
+                        <div className="flex-1">
+                          <BoxPositionBar positionInBox={item.positionInBox!} isBreakout={item.isBreakout} />
+                        </div>
+                        <span className="text-[10px] text-zinc-400 shrink-0">{item.positionInBox!.toFixed(0)}%</span>
+                        <span className="text-[10px] text-zinc-600 shrink-0">
+                          {formatPrice(item.boxBottom!)}–{formatPrice(item.boxTop!)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-zinc-700">박스권 없음</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── 데스크탑: 테이블 ── */}
+            <div className="hidden sm:block rounded-xl border border-zinc-800 overflow-hidden">
+              <div className="grid grid-cols-[1fr_95px_55px_55px_55px_100px_120px_65px] bg-zinc-900 px-3 py-2 text-xs text-zinc-500 font-medium border-b border-zinc-800">
+                <span>종목</span>
+                <span className="text-right">거래대금</span>
+                <span className="text-right text-cyan-400">MA50</span>
+                <span className="text-right text-purple-400">MA110</span>
+                <span className="text-right text-orange-400">MA180</span>
+                <span className="text-center">구름대</span>
+                <span className="text-center">박스권</span>
+                <span className="text-right">등락률</span>
+              </div>
+
+              <div className="divide-y divide-zinc-800/60">
+                {filteredItems.map((item, idx) => {
+                  const exStyle = EXCHANGE_STYLE[item.exchange] ?? { label: item.exchange, color: 'text-zinc-400', bg: '' };
+                  const changeColor = item.changeRate > 0 ? 'text-red-400' : 'text-blue-400';
+
+                  return (
+                    <div
+                      key={`${item.exchange}-${item.symbol}`}
+                      onClick={() => setSelectedItem(item)}
+                      className="grid grid-cols-[1fr_95px_55px_55px_55px_100px_120px_65px] px-3 py-2.5 cursor-pointer hover:bg-zinc-900/60 active:bg-zinc-800/80 transition-colors"
+                    >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[10px] text-zinc-600 w-5 shrink-0">{idx + 1}</span>
                         <div className="min-w-0">
@@ -394,7 +422,7 @@ export default function MaSqueezePage() {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-zinc-700 block text-center">박스없음</span>
+                          <span className="text-[10px] text-zinc-700 block text-center">-</span>
                         )}
                       </div>
                       <div className="text-right self-center">
@@ -403,14 +431,14 @@ export default function MaSqueezePage() {
                         </span>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
-        {/* 스캔 진행 중 (결과 없음 + isAnalyzing) */}
+        {/* 스캔 진행 중 */}
         {result && filteredItems.length === 0 && !loading && result.isAnalyzing && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <svg className="w-8 h-8 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
@@ -422,7 +450,7 @@ export default function MaSqueezePage() {
           </div>
         )}
 
-        {/* 결과 없음 (스캔 완료 후) */}
+        {/* 결과 없음 */}
         {result && filteredItems.length === 0 && !loading && !result.isAnalyzing && (
           <div className="flex flex-col items-center justify-center py-20 gap-2 text-zinc-500">
             <svg className="w-10 h-10 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -453,10 +481,11 @@ export default function MaSqueezePage() {
         {/* 범례 */}
         <div className="mt-4 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50">
           <p className="text-[10px] text-zinc-600 leading-relaxed">
-            <span className="text-emerald-400">구름 위</span>: 현재가 &gt; 일목구름 선행스팬A·B 최댓값 ·{' '}
+            <span className="text-emerald-400">구름 위</span>: 현재가 &gt; 일목구름 선행스팬A·B ·{' '}
             <span className="text-cyan-400">정배열</span>: MA50 &gt; MA110 &gt; MA180 ·{' '}
-            <span className="text-amber-400">박스권</span>: 최근 20봉 고저 1~25% 범위 · 바 색상 — <span className="text-red-400">돌파</span> / <span className="text-amber-400">상단80%↑</span> / <span className="text-emerald-400">중단</span> / <span className="text-zinc-400">하단</span> ·{' '}
-            <span className="text-amber-400">A등급</span>: 종합스코어 6점 이상 · MA·박스권 수치는 1h 기준 · 빗썸 4h→6h 대체
+            <span className="text-amber-400">박스</span>: 최근 20봉 고저 1~25% ·{' '}
+            바 색상 <span className="text-red-400">돌파</span> / <span className="text-amber-400">상단80%↑</span> / <span className="text-emerald-400">중단</span> / <span className="text-zinc-400">하단</span> ·{' '}
+            <span className="text-amber-400">A</span>: 스코어 6점↑ · MA는 1h 기준
           </p>
         </div>
 
