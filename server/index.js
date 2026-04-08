@@ -28,6 +28,7 @@ const boxBreakoutRouter    = require('./routes/box-breakout');
 const maTrendRouter        = require('./routes/ma-trend');
 const maSqueezeRouter      = require('./routes/ma-squeeze');
 const maReverseRouter      = require('./routes/ma-reverse');
+const maCycleRouter        = require('./routes/ma-cycle');
 
 // API 라우트 등록
 app.use('/api/scan',            scanRouter);
@@ -40,6 +41,7 @@ app.use('/api/box-breakout',    boxBreakoutRouter);
 app.use('/api/ma-trend',        maTrendRouter);
 app.use('/api/ma-squeeze',     maSqueezeRouter);
 app.use('/api/ma-reverse',    maReverseRouter);
+app.use('/api/ma-cycle',      maCycleRouter);
 
 // 헬스체크
 app.get('/health', (req, res) => {

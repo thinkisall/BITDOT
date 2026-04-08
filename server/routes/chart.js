@@ -44,10 +44,21 @@ router.get('/', async (req, res) => {
     if (exchange === 'upbit') {
       const market = `KRW-${symbol}`;
       const tf = upbitTfMap[timeframe] || 'minutes/60';
-      const response = await fetch(
-        `https://api.upbit.com/v1/candles/${tf}?market=${market}&count=250`
-      );
-      const data = await response.json();
+      const url = `https://api.upbit.com/v1/candles/${tf}?market=${market}&count=200`;
+
+      let data = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch(url);
+        if (response.status === 429) {
+          await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+          continue;
+        }
+        if (!response.ok) throw new Error(`Upbit API 오류: HTTP ${response.status}`);
+        data = await response.json();
+        break;
+      }
+      if (!data) throw new Error('Upbit API rate limit 초과, 잠시 후 다시 시도해주세요.');
+      if (!Array.isArray(data)) throw new Error(`Upbit 응답 오류: ${data?.error?.message || JSON.stringify(data)}`);
 
       candles = data.map(c => ({
         time: Math.floor(new Date(c.candle_date_time_kst).getTime() / 1000),

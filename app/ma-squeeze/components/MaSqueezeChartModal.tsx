@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createChart } from 'lightweight-charts';
+import { createChart, LineStyle } from 'lightweight-charts';
 import { getHomeServerUrl } from '@/lib/home-server';
 
 interface Props {
@@ -14,6 +14,9 @@ interface Props {
   ma180: number;
   currentPrice: number;
   spreadPct: number;
+  boxTop?: number | null;
+  boxBottom?: number | null;
+  hasBox?: boolean;
 }
 
 const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h'] as const;
@@ -27,6 +30,7 @@ function formatPrice(price: number): string {
 
 export default function MaSqueezeChartModal({
   isOpen, onClose, symbol, exchange, ma50, ma110, ma180, currentPrice, spreadPct,
+  boxTop, boxBottom, hasBox,
 }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -128,6 +132,40 @@ export default function MaSqueezeChartModal({
           chart.addLineSeries({ color: '#fb923c', lineWidth: isMobile ? 1 : 2, title: 'MA180', priceLineVisible: false, lastValueVisible: false }).setData(data.sma180);
         }
 
+        // ── 박스권 표시 ──
+        if (hasBox && boxTop && boxBottom && data.candles.length >= 2) {
+          const firstTime = data.candles[0].time;
+          const lastTime  = data.candles[data.candles.length - 1].time;
+
+          // 상단선
+          const topSeries = chart.addLineSeries({
+            color: '#f59e0b',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            title: '박스상단',
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          topSeries.setData([
+            { time: firstTime as any, value: boxTop },
+            { time: lastTime  as any, value: boxTop },
+          ]);
+
+          // 하단선
+          const bottomSeries = chart.addLineSeries({
+            color: '#f59e0b',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            title: '박스하단',
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          bottomSeries.setData([
+            { time: firstTime as any, value: boxBottom },
+            { time: lastTime  as any, value: boxBottom },
+          ]);
+        }
+
         chart.timeScale().fitContent();
 
         resizeObserver = new ResizeObserver((entries) => {
@@ -155,7 +193,7 @@ export default function MaSqueezeChartModal({
         chartRef.current = null;
       }
     };
-  }, [isOpen, symbol, exchange, timeframe, chartHeight]);
+  }, [isOpen, symbol, exchange, timeframe, chartHeight, hasBox, boxTop, boxBottom]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -257,6 +295,20 @@ export default function MaSqueezeChartModal({
               <span className="text-zinc-500">MA180</span>
               <span className="text-orange-400 font-medium">{formatPrice(ma180)}</span>
             </div>
+            {hasBox && boxTop && boxBottom && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 border-t border-dashed border-amber-400" />
+                  <span className="text-zinc-500">박스상단</span>
+                  <span className="text-amber-400 font-medium">{formatPrice(boxTop)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 border-t border-dashed border-amber-400" />
+                  <span className="text-zinc-500">박스하단</span>
+                  <span className="text-amber-400 font-medium">{formatPrice(boxBottom)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

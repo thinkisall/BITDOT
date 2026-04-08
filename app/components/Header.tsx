@@ -52,6 +52,12 @@ export default function Header() {
             MA스퀴즈
           </Link>
           <Link
+            href="/ma-cycle"
+            className={`whitespace-nowrap transition-colors ${pathname === "/ma-cycle" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            MA사이클
+          </Link>
+          <Link
             href="/funding"
             className={`whitespace-nowrap transition-colors ${pathname === "/funding" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
@@ -174,6 +180,17 @@ export default function Header() {
                 }`}
               >
                 MA 스퀴즈
+              </Link>
+              <Link
+                href="/ma-cycle"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/ma-cycle"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                MA 사이클
               </Link>
               <Link
                 href="/funding"
