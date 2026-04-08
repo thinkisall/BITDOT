@@ -2,11 +2,13 @@
 import { initializeApp, getApps } from 'firebase/app';
 import {
   initializeAuth,
+  getAuth,
   indexedDBLocalPersistence,
   browserLocalPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
   getRedirectResult,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -20,21 +22,31 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase (singleton pattern)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const isNewApp = getApps().length === 0;
+const app = isNewApp ? initializeApp(firebaseConfig) : getApps()[0];
 
-// iOS Safari ITP 대응: indexedDB 우선 사용 + popupRedirectResolver 명시
-const auth = initializeAuth(app, {
-  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-  popupRedirectResolver: browserPopupRedirectResolver,
-});
+// 이미 초기화된 경우 getAuth 사용 (중복 initializeAuth 방지)
+const auth = isNewApp
+  ? initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    })
+  : getAuth(app);
 
 const googleProvider = new GoogleAuthProvider();
 
-// 모든 플랫폼에서 popup 사용 (iOS Safari 포함)
-// initializeAuth에 browserPopupRedirectResolver를 명시했으므로 모바일에서도 동작
-export const signInWithGoogle = () =>
-  signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+// 모바일: redirect / 데스크톱: popup
+export const signInWithGoogle = () => {
+  if (isMobile()) {
+    return signInWithRedirect(auth, googleProvider, browserPopupRedirectResolver);
+  }
+  return signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+};
 
 export { getRedirectResult, auth };
 export const signOut = () => firebaseSignOut(auth);

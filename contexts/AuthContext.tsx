@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth, signInWithGoogle, signOut } from '@/lib/firebase';
+import { auth, signInWithGoogle, signOut, getRedirectResult } from '@/lib/firebase';
 import { createOrUpdateUser, checkPremiumExpiry, User as SupabaseUser } from '@/lib/supabase/users';
 
 interface AuthContextType {
@@ -54,6 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 모바일 redirect 로그인 완료 처리
+  useEffect(() => {
+    getRedirectResult(auth).catch((error) => {
+      console.error('Redirect login error:', error);
+    });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
