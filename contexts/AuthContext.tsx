@@ -55,52 +55,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [premiumUntil, setPremiumUntil] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 모바일 redirect 로그인 후 돌아왔을 때 결과 처리
   useEffect(() => {
-    getRedirectResult(auth).catch((error) => {
-      // 에러 무시 (redirect 결과 없으면 null 반환, 에러 아님)
-      if (error?.code !== 'auth/null-user') {
-        console.error('Redirect result error:', error);
-      }
-    });
-  }, []);
+    let unsubscribe = () => {};
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+    // getRedirectResult를 먼저 완료한 뒤 onAuthStateChanged 등록
+    // → redirect 후 돌아왔을 때 null 깜빡임 없이 바로 user로 시작
+    getRedirectResult(auth)
+      .catch((error) => {
+        if (error?.code && error.code !== 'auth/null-user') {
+          console.error('Redirect result error:', error);
+        }
+      })
+      .finally(() => {
+        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          setUser(firebaseUser);
 
-      if (firebaseUser) {
-        // 캐시 우선 적용 → loading 즉시 해제, UI 빠르게 표시
-        const cached = readPremiumCache(firebaseUser.uid);
-        if (cached) {
-          setIsPremium(cached.isPremium);
-          setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
+          if (firebaseUser) {
+            const cached = readPremiumCache(firebaseUser.uid);
+            if (cached) {
+              setIsPremium(cached.isPremium);
+              setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
+              setLoading(false);
+            }
+
+            try {
+              const firestoreUser = await createOrUpdateUser(
+                firebaseUser.uid,
+                firebaseUser.email || '',
+                firebaseUser.displayName,
+                firebaseUser.photoURL
+              );
+              const isValid = await checkPremiumExpiry(firestoreUser);
+              const until = firestoreUser.premiumUntil ?? null;
+              setIsPremium(isValid);
+              setPremiumUntil(until);
+              writePremiumCache(firebaseUser.uid, isValid, until);
+            } catch (error) {
+              console.error('Error loading user data:', error);
+              if (!cached) { setIsPremium(false); setPremiumUntil(null); }
+            }
+          } else {
+            setIsPremium(false);
+            setPremiumUntil(null);
+          }
+
           setLoading(false);
-        }
-
-        try {
-          const firestoreUser = await createOrUpdateUser(
-            firebaseUser.uid,
-            firebaseUser.email || '',
-            firebaseUser.displayName,
-            firebaseUser.photoURL
-          );
-          const isValid = await checkPremiumExpiry(firestoreUser);
-          const until = firestoreUser.premiumUntil ?? null;
-          setIsPremium(isValid);
-          setPremiumUntil(until);
-          writePremiumCache(firebaseUser.uid, isValid, until);
-        } catch (error) {
-          console.error('Error loading user data:', error);
-          if (!cached) { setIsPremium(false); setPremiumUntil(null); }
-        }
-      } else {
-        setIsPremium(false);
-        setPremiumUntil(null);
-      }
-
-      setLoading(false);
-    });
+        });
+      });
 
     return () => unsubscribe();
   }, []);
