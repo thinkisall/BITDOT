@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth, signInWithGoogle, signOut, getRedirectResult } from '@/lib/firebase';
+import { auth, signInWithGoogle, signOut } from '@/lib/firebase';
 import { createOrUpdateUser, checkPremiumExpiry, User as SupabaseUser } from '@/lib/supabase/users';
 
 interface AuthContextType {
@@ -56,52 +56,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubscribe = () => {};
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
 
-    // getRedirectResult를 먼저 완료한 뒤 onAuthStateChanged 등록
-    // → redirect 후 돌아왔을 때 null 깜빡임 없이 바로 user로 시작
-    getRedirectResult(auth)
-      .catch((error) => {
-        if (error?.code && error.code !== 'auth/null-user') {
-          console.error('Redirect result error:', error);
-        }
-      })
-      .finally(() => {
-        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          setUser(firebaseUser);
-
-          if (firebaseUser) {
-            const cached = readPremiumCache(firebaseUser.uid);
-            if (cached) {
-              setIsPremium(cached.isPremium);
-              setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
-              setLoading(false);
-            }
-
-            try {
-              const firestoreUser = await createOrUpdateUser(
-                firebaseUser.uid,
-                firebaseUser.email || '',
-                firebaseUser.displayName,
-                firebaseUser.photoURL
-              );
-              const isValid = await checkPremiumExpiry(firestoreUser);
-              const until = firestoreUser.premiumUntil ?? null;
-              setIsPremium(isValid);
-              setPremiumUntil(until);
-              writePremiumCache(firebaseUser.uid, isValid, until);
-            } catch (error) {
-              console.error('Error loading user data:', error);
-              if (!cached) { setIsPremium(false); setPremiumUntil(null); }
-            }
-          } else {
-            setIsPremium(false);
-            setPremiumUntil(null);
-          }
-
+      if (firebaseUser) {
+        const cached = readPremiumCache(firebaseUser.uid);
+        if (cached) {
+          setIsPremium(cached.isPremium);
+          setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
           setLoading(false);
-        });
-      });
+        }
+
+        try {
+          const firestoreUser = await createOrUpdateUser(
+            firebaseUser.uid,
+            firebaseUser.email || '',
+            firebaseUser.displayName,
+            firebaseUser.photoURL
+          );
+          const isValid = await checkPremiumExpiry(firestoreUser);
+          const until = firestoreUser.premiumUntil ?? null;
+          setIsPremium(isValid);
+          setPremiumUntil(until);
+          writePremiumCache(firebaseUser.uid, isValid, until);
+        } catch (error) {
+          console.error('Error loading user data:', error);
+          if (!cached) { setIsPremium(false); setPremiumUntil(null); }
+        }
+      } else {
+        setIsPremium(false);
+        setPremiumUntil(null);
+      }
+
+      setLoading(false);
+    });
 
     return () => unsubscribe();
   }, []);
