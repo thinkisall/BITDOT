@@ -1,13 +1,30 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/app/components/Header';
 
+function detectInAppBrowser(): string | null {
+  if (typeof navigator === 'undefined') return null;
+  const ua = navigator.userAgent;
+  if (/NAVER|NaverApp/i.test(ua)) return '네이버 앱';
+  if (/YTM|YouTube/i.test(ua)) return '유튜브 앱';
+  if (/musical_ly|TikTok/i.test(ua)) return '틱톡 앱';
+  if (/Barcelona|Threads/i.test(ua)) return '쓰레드 앱';
+  if (/Instagram/i.test(ua)) return '인스타그램 앱';
+  if (/KAKAOTALK|KakaoTalk/i.test(ua)) return '카카오톡 앱';
+  return null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading, signInWithGoogle, signInWithNaver } = useAuth();
+  const [inAppBrowser, setInAppBrowser] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInAppBrowser(detectInAppBrowser());
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -21,6 +38,15 @@ export default function LoginPage() {
     } catch (error) {
       console.error('Login failed:', error);
     }
+  };
+
+  const copyUrl = () => {
+    const url = window.location.origin;
+    navigator.clipboard?.writeText(url).then(() => {
+      alert('주소가 복사되었습니다.\nSafari 또는 Chrome에 붙여넣기 해주세요.');
+    }).catch(() => {
+      alert(`아래 주소를 Safari 또는 Chrome에서 열어주세요:\n\n${url}`);
+    });
   };
 
   if (loading) {
@@ -37,8 +63,35 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
       <Header />
-      <main className="flex items-center justify-center min-h-[80vh] px-4">
-        <div className="w-full max-w-sm">
+      <main className="flex items-center justify-center min-h-[80vh] px-4 py-8">
+        <div className="w-full max-w-sm space-y-4">
+
+          {/* 인앱 브라우저 경고 */}
+          {inAppBrowser && (
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 p-4">
+              <div className="flex gap-3">
+                <svg className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-bold text-orange-400 mb-1">
+                    {inAppBrowser}에서는 로그인이 어려울 수 있어요
+                  </p>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    앱 내 브라우저는 소셜 로그인을 차단하는 경우가 있습니다.
+                    <span className="text-orange-300 font-medium"> Safari 또는 Chrome</span>에서 열면 정상적으로 로그인됩니다.
+                  </p>
+                  <button
+                    onClick={copyUrl}
+                    className="mt-2 text-xs text-orange-400 underline underline-offset-2"
+                  >
+                    주소 복사하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
             <div className="w-14 h-14 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-5">
               <svg className="w-7 h-7 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
