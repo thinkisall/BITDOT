@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '../components/Header';
-import { signInWithGoogle } from '@/lib/firebase';
 
 interface PremiumRequestStatus {
   id: string;
@@ -13,7 +12,7 @@ interface PremiumRequestStatus {
 }
 
 export default function PremiumPage() {
-  const { user, loading, isPremium, premiumUntil } = useAuth();
+  const { user, loading, isPremium, premiumUntil, signInWithGoogle } = useAuth();
   const [depositorName, setDepositorName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

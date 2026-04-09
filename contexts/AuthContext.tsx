@@ -1,16 +1,19 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth, signInWithGoogle, signOut, getRedirectResult, isAndroidDevice } from '@/lib/firebase';
-import { createOrUpdateUser, checkPremiumExpiry, User as SupabaseUser } from '@/lib/supabase/users';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, signInWithGoogle as firebaseSignInWithGoogle, signOut as firebaseSignOut } from '@/lib/firebase';
+import { getNaverAuthUrl, getNaverSession, clearNaverSession } from '@/lib/naver';
+import { AppUser } from '@/lib/auth-types';
+import { createOrUpdateUser, checkPremiumExpiry } from '@/lib/supabase/users';
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
   isPremium: boolean;
   premiumUntil: Date | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithNaver: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -20,12 +23,12 @@ const AuthContext = createContext<AuthContextType>({
   premiumUntil: null,
   loading: true,
   signInWithGoogle: async () => {},
+  signInWithNaver: () => {},
   signOut: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-// --- localStorage 프리미엄 캐시 (5분 TTL) ---
 const PREMIUM_CACHE_KEY = 'bitdot_premium_cache';
 const PREMIUM_CACHE_TTL = 5 * 60 * 1000;
 
@@ -46,56 +49,86 @@ function writePremiumCache(uid: string, isPremium: boolean, premiumUntil: Date |
       premiumUntil: premiumUntil?.toISOString() ?? null,
       timestamp: Date.now(),
     }));
-  } catch { /* localStorage 불가 환경 무시 */ }
+  } catch { }
+}
+
+async function loadPremium(
+  uid: string,
+  email: string,
+  displayName: string | null,
+  photoURL: string | null,
+  setIsPremium: (v: boolean) => void,
+  setPremiumUntil: (v: Date | null) => void,
+) {
+  const cached = readPremiumCache(uid);
+  if (cached) {
+    setIsPremium(cached.isPremium);
+    setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
+  }
+  try {
+    const supabaseUser = await createOrUpdateUser(uid, email, displayName, photoURL);
+    const isValid = await checkPremiumExpiry(supabaseUser);
+    const until = supabaseUser.premiumUntil ?? null;
+    setIsPremium(isValid);
+    setPremiumUntil(until);
+    writePremiumCache(uid, isValid, until);
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    if (!cached) { setIsPremium(false); setPremiumUntil(null); }
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Android redirect 로그인 완료 처리 (iOS는 popup 사용하므로 불필요)
-  useEffect(() => {
-    if (!isAndroidDevice()) return;
-    getRedirectResult(auth).catch((error) => {
-      console.error('Redirect login error:', error);
-    });
-  }, []);
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-
       if (firebaseUser) {
-        const cached = readPremiumCache(firebaseUser.uid);
-        if (cached) {
-          setIsPremium(cached.isPremium);
-          setPremiumUntil(cached.premiumUntil ? new Date(cached.premiumUntil) : null);
-          setLoading(false);
-        }
-
-        try {
-          const firestoreUser = await createOrUpdateUser(
-            firebaseUser.uid,
-            firebaseUser.email || '',
-            firebaseUser.displayName,
-            firebaseUser.photoURL
-          );
-          const isValid = await checkPremiumExpiry(firestoreUser);
-          const until = firestoreUser.premiumUntil ?? null;
-          setIsPremium(isValid);
-          setPremiumUntil(until);
-          writePremiumCache(firebaseUser.uid, isValid, until);
-        } catch (error) {
-          console.error('Error loading user data:', error);
-          if (!cached) { setIsPremium(false); setPremiumUntil(null); }
-        }
+        const appUser: AppUser = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
+          provider: 'google',
+        };
+        setUser(appUser);
+        await loadPremium(
+          firebaseUser.uid,
+          firebaseUser.email || '',
+          firebaseUser.displayName,
+          firebaseUser.photoURL,
+          setIsPremium,
+          setPremiumUntil,
+        );
       } else {
-        setIsPremium(false);
-        setPremiumUntil(null);
+        // Google 로그인 없으면 네이버 세션 확인
+        const naver = getNaverSession();
+        if (naver) {
+          const appUser: AppUser = {
+            uid: naver.uid,
+            email: naver.email,
+            displayName: naver.displayName,
+            photoURL: naver.photoURL,
+            provider: 'naver',
+          };
+          setUser(appUser);
+          await loadPremium(
+            naver.uid,
+            naver.email || `${naver.uid}@naver.local`,
+            naver.displayName,
+            naver.photoURL,
+            setIsPremium,
+            setPremiumUntil,
+          );
+        } else {
+          setUser(null);
+          setIsPremium(false);
+          setPremiumUntil(null);
+        }
       }
-
       setLoading(false);
     });
 
@@ -104,16 +137,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignInWithGoogle = async () => {
     try {
-      await signInWithGoogle();
+      await firebaseSignInWithGoogle();
     } catch (error) {
       console.error('Google login error:', error);
       throw error;
     }
   };
 
+  const handleSignInWithNaver = () => {
+    window.location.href = getNaverAuthUrl();
+  };
+
   const handleSignOut = async () => {
     try {
-      await signOut();
+      clearNaverSession();
+      await firebaseSignOut();
+      setUser(null);
+      setIsPremium(false);
+      setPremiumUntil(null);
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
@@ -128,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         premiumUntil,
         loading,
         signInWithGoogle: handleSignInWithGoogle,
+        signInWithNaver: handleSignInWithNaver,
         signOut: handleSignOut,
       }}
     >

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
+import { AppUser as User } from '@/lib/auth-types';
 import { Comment } from '@/lib/supabase/types';
 import { subscribeToComments, getComments } from '@/lib/supabase/comments';
 import CommentItem from './CommentItem';

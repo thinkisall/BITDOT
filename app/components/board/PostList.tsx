@@ -2,7 +2,7 @@
 
 import { Post } from '@/lib/supabase/types';
 import PostCard from './PostCard';
-import { User } from 'firebase/auth';
+import { AppUser as User } from '@/lib/auth-types';
 
 interface PostListProps {
   posts: Post[];

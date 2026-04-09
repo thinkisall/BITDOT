@@ -32,7 +32,8 @@
       "Bash(tasklist /FI \"IMAGENAME eq cloudflared.exe\" /FO LIST)",
       "Bash(wmic process where \"name=''cloudflared.exe''\" get ProcessId,CommandLine)",
       "Bash(# 7100 PID 서비스 확인 sc queryex type= all state= all)",
-      "Bash(find d:/workspace/BITDOT -name *AuthContext* -o -name *auth*context*)"
+      "Bash(find d:/workspace/BITDOT -name *AuthContext* -o -name *auth*context*)",
+      "WebFetch(domain:developers.kakao.com)"
     ],
     "additionalDirectories": [
       "d:\\workspace\\BITDOT\\app\\api"

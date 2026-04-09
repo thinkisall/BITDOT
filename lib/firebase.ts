@@ -5,11 +5,10 @@ import {
   getAuth,
   indexedDBLocalPersistence,
   browserLocalPersistence,
+  inMemoryPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 
@@ -25,34 +24,21 @@ const firebaseConfig = {
 const isNewApp = getApps().length === 0;
 const app = isNewApp ? initializeApp(firebaseConfig) : getApps()[0];
 
+const isClient = typeof window !== 'undefined';
+
 const auth = isNewApp
   ? initializeAuth(app, {
-      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-      popupRedirectResolver: browserPopupRedirectResolver,
+      persistence: isClient
+        ? [indexedDBLocalPersistence, browserLocalPersistence]
+        : [inMemoryPersistence],
+      popupRedirectResolver: isClient ? browserPopupRedirectResolver : undefined,
     })
   : getAuth(app);
 
 const googleProvider = new GoogleAuthProvider();
 
-// iOS Safari는 ITP로 인해 redirect 시 IndexedDB가 초기화됨 → popup 사용
-// Android Chrome은 redirect 정상 동작
-function isAndroid(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Android/i.test(navigator.userAgent);
-}
+export const signInWithGoogle = () =>
+  signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
 
-export function isAndroidDevice(): boolean {
-  return isAndroid();
-}
-
-export const signInWithGoogle = () => {
-  if (isAndroid()) {
-    // Android: redirect 방식 (popup이 새 창으로 열릴 수 있어 redirect가 더 안정적)
-    return signInWithRedirect(auth, googleProvider, browserPopupRedirectResolver);
-  }
-  // iOS Safari & 데스크톱: popup (Safari는 새 탭으로 열어줌)
-  return signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
-};
-
-export { getRedirectResult, auth };
+export { auth };
 export const signOut = () => firebaseSignOut(auth);

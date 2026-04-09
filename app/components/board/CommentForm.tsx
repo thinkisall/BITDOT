@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { User } from 'firebase/auth';
+import { AppUser as User } from '@/lib/auth-types';
 import { createComment } from '@/lib/supabase/comments';
 
 interface CommentFormProps {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Post } from '@/lib/supabase/types';
 import { deletePost } from '@/lib/supabase/posts';
-import { User } from 'firebase/auth';
+import { AppUser as User } from '@/lib/auth-types';
 
 interface PostCardProps {
   post: Post;

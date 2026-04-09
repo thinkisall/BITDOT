@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User } from 'firebase/auth';
+import { AppUser as User } from '@/lib/auth-types';
 import { createPost, updatePost } from '@/lib/supabase/posts';
 import { Post } from '@/lib/supabase/types';
 

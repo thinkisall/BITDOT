@@ -22,7 +22,13 @@
       "Bash(xargs kill -9)",
       "Bash(kill:*)",
       "Bash(/home/thinkisall/trading_env/bin/uvicorn:*)",
-      "Bash(brew list:*)"
+      "Bash(brew list:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next start\")",
+      "Bash(pkill -f \"node server\")",
+      "Bash(pkill -f \"next\")",
+      "Bash(pkill -f \"node\")",
+      "WebSearch"
     ]
   }
 }
