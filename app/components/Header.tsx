@@ -24,7 +24,7 @@ export default function Header() {
     <header className="border-b border-zinc-800 bg-zinc-950">
       <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4">
         {/* Logo */}
-        <Link href="/" className="flex-shrink-0" onClick={closeMenu}>
+        <Link href="/" className="shrink-0" onClick={closeMenu}>
           <h1 className="text-base sm:text-lg md:text-2xl font-bold text-yellow-500 cursor-pointer whitespace-nowrap">
             <span className="hidden sm:inline">BITDAMOABOM</span>
             <span className="sm:hidden">BITDA</span>
@@ -38,6 +38,12 @@ export default function Header() {
             className={`whitespace-nowrap transition-colors ${pathname === "/" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
           >
             홈
+          </Link>
+          <Link
+            href="/market"
+            className={`whitespace-nowrap transition-colors ${pathname === "/market" ? "text-white font-medium" : "text-zinc-400 hover:text-white"}`}
+          >
+            시세
           </Link>
           <Link
             href="/box-breakout"
@@ -158,6 +164,17 @@ export default function Header() {
                 }`}
               >
                 홈
+              </Link>
+              <Link
+                href="/market"
+                onClick={closeMenu}
+                className={`px-4 py-3 rounded-lg transition-colors ${
+                  pathname === "/market"
+                    ? "bg-yellow-500/20 text-yellow-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                시세
               </Link>
               <Link
                 href="/box-breakout"
