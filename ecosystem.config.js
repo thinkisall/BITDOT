@@ -33,20 +33,5 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
-    // ── Cloudflare Tunnel (api.maketruthy.com → localhost:8000) ──────────
-    {
-      name: 'bitdot-tunnel',
-      script: '/opt/homebrew/bin/cloudflared',
-      args: 'tunnel --no-autoupdate run --token ' + (process.env.CLOUDFLARE_TUNNEL_TOKEN || ''),
-      cwd: __dirname,
-      instances: 1,
-      autorestart: true,
-      watch: false,
-      interpreter: 'none',  // 직접 실행 (node interpreter 아님)
-      env: {
-        CLOUDFLARE_TUNNEL_TOKEN: process.env.CLOUDFLARE_TUNNEL_TOKEN || '',
-      },
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-    },
   ],
 };

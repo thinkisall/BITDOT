@@ -9,6 +9,7 @@ const homeServerFetcher = (url: string) => fetch(getHomeServerUrl(url)).then((r)
 export function useBoxBreakoutData() {
   const [signals, setSignals] = useState<BoxBreakoutSignal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -30,17 +31,21 @@ export function useBoxBreakoutData() {
   const fetchData = useCallback(async (isInitialLoad = false) => {
     try {
       if (isInitialLoad) setLoading(true);
+      setError(null);
 
       // 홈서버에서 무거운 연산 처리
       const res = await fetch(getHomeServerUrl(`/api/box-breakout?timeframe=${timeframe}&exchange=${exchange}`));
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data: ApiResponse<BoxBreakoutSignal> = await res.json();
 
       if (data.signals) setSignals(data.signals);
       setLastUpdated(data.lastUpdated || 0);
       setIsAnalyzing(data.isAnalyzing || false);
       setProgress(data.progress || { current: 0, total: 0 });
-    } catch (error) {
-      console.error("Failed to fetch box breakout data:", error);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Failed to fetch box breakout data:", err);
+      setError(message);
     } finally {
       if (isInitialLoad) setLoading(false);
       setIsRefreshing(false);
@@ -71,6 +76,7 @@ export function useBoxBreakoutData() {
   return {
     signals,
     loading,
+    error,
     isRefreshing,
     isAnalyzing,
     progress,

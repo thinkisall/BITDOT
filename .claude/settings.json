@@ -33,10 +33,28 @@
       "Bash(wmic process where \"name=''cloudflared.exe''\" get ProcessId,CommandLine)",
       "Bash(# 7100 PID 서비스 확인 sc queryex type= all state= all)",
       "Bash(find d:/workspace/BITDOT -name *AuthContext* -o -name *auth*context*)",
-      "WebFetch(domain:developers.kakao.com)"
+      "WebFetch(domain:developers.kakao.com)",
+      "Bash(taskkill /PID 25348 /F)",
+      "Bash(cmd.exe /c \"taskkill /PID 25348 /F\")",
+      "Bash(cmd.exe /c \"taskkill /PID 25348 /F 2>&1\")",
+      "Bash(cmd.exe /c \"pm2 list 2>&1\")",
+      "Bash(cmd.exe /c \"pm2 status 2>&1\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :8000 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\workspace\\\\BITDOT && node server/index.js 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\workspace\\\\BITDOT && node server/index.js\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\workspace\\\\BITDOT && node -e \\\\\"require\\('./server/index.js'\\)\\\\\" 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\workspace\\\\BITDOT && node -e \\\\\"try { require\\('./server/index.js'\\) } catch\\(e\\) { console.error\\(e.message\\) }\\\\\" 2>&1\")",
+      "Bash(jobs)",
+      "Bash(taskkill //F //PID 13464)",
+      "Bash(where ngrok:*)",
+      "Bash(cmd.exe /c \"mkdir \\\\\"C:\\\\workspace\\\\BITDOT\\\\app\\\\api\\\\proxy\\\\[...path]\\\\\" 2>&1\")",
+      "Bash(cmd.exe /c \"pm2 restart bitdot-frontend 2>&1\")",
+      "Bash(cmd.exe /c \"pm2 start ecosystem.config.js 2>&1\")"
     ],
     "additionalDirectories": [
-      "d:\\workspace\\BITDOT\\app\\api"
+      "d:\\workspace\\BITDOT\\app\\api",
+      "C:\\workspace\\BITDOT\\app\\api\\proxy\\[...path",
+      "C:\\workspace\\BITDOT\\app\\api\\proxy\\[...path]"
     ]
   }
 }

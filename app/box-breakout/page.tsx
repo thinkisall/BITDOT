@@ -35,6 +35,7 @@ export default function BoxBreakoutPage() {
   const {
     signals,
     loading,
+    error,
     isRefreshing,
     isAnalyzing,
     progress,
@@ -284,6 +285,21 @@ export default function BoxBreakoutPage() {
             </button>
           ))}
         </div>
+
+        {error && (
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
+            <span className="text-red-400 text-sm flex-1">
+              API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.
+              <span className="ml-2 text-red-400/60 text-xs">({error})</span>
+            </span>
+            <button
+              onClick={() => fetchData(false)}
+              className="shrink-0 rounded-md bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30 transition-colors"
+            >
+              재시도
+            </button>
+          </div>
+        )}
 
         <BoxBreakoutFilters
           searchTerm={searchTerm}
