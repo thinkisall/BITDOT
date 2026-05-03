@@ -65,7 +65,9 @@
       "Bash(cmd.exe /c \"winget install ngrok.ngrok 2>&1\")",
       "Read(//c/Program Files/**)",
       "Bash(/c/Users/5800X/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe config:*)",
-      "Bash(/c/Users/5800X/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe update:*)"
+      "Bash(/c/Users/5800X/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe update:*)",
+      "Bash(powershell.exe -Command 'Get-ScheduledTask | Where-Object { $_.TaskName -like '\\\\''*BITDOT*'\\\\'' } | Select-Object TaskName, State')",
+      "Bash(powershell.exe -Command 'Unregister-ScheduledTask -TaskName '\\\\''BITDOT Server'\\\\'' -Confirm:$false')"
     ],
     "additionalDirectories": [
       "d:\\workspace\\BITDOT\\app\\api",

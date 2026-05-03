@@ -18,14 +18,12 @@ import { BoxBreakoutHeader } from "./components/BoxBreakoutHeader";
 import { BoxBreakoutFilters } from "./components/BoxBreakoutFilters";
 import { SignalList } from "./components/SignalList";
 import { BTCStrengthPanel } from "./components/BTCStrengthPanel";
-import { CoupangAdModal, hasCoupangVisitedToday } from "@/components/CoupangAdModal";
 
 const ITEMS_PER_PAGE = 10;
 
 export default function BoxBreakoutPage() {
   const router = useRouter();
   const { isPremium, user, loading: authLoading } = useAuth();
-  const [showCoupangModal, setShowCoupangModal] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [positionFilter, setPositionFilter] = useState<
@@ -51,11 +49,6 @@ export default function BoxBreakoutPage() {
   } = useBoxBreakoutData();
 
   // 쿠팡 광고 모달 체크
-  useEffect(() => {
-    if (!authLoading && !hasCoupangVisitedToday()) {
-      setShowCoupangModal(true);
-    }
-  }, [authLoading]);
 
   // 프리미엄 체크 제거 - 일반 사용자도 접근 가능 (1~10위는 블러 처리)
 
@@ -413,13 +406,6 @@ export default function BoxBreakoutPage() {
         </div>
       </main>
 
-      {/* 쿠팡 광고 모달 */}
-      {showCoupangModal && (
-        <CoupangAdModal
-          onClose={() => setShowCoupangModal(false)}
-          targetPath="/box-breakout"
-        />
-      )}
     </div>
   );
 }

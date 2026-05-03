@@ -3,6 +3,8 @@ setlocal
 
 cd /d "%~dp0"
 
+set NGROK="C:\Users\5800X\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe"
+
 :MENU
 cls
 echo.
@@ -10,99 +12,78 @@ echo ============================================================
 echo    BITDOT Server Launcher
 echo ============================================================
 echo.
-echo   [1] Dev server   (Next.js dev + API server)
-echo   [2] Production   (PM2 full stack)
+echo   [1] Production   (API + ngrok + Next.js)
+echo   [2] Dev server   (API + Next.js dev)
 echo   [3] API only     (port 8000)
-echo   [4] Frontend only (Next.js dev, port 3000)
-echo   [5] Status       (PM2 status)
-echo   [6] Stop all     (PM2 stop all)
-echo   [7] Restart all  (PM2 restart all)
-echo   [8] Logs         (PM2 logs)
+echo   [4] Frontend only
+echo   [5] ngrok only
 echo   [0] Exit
 echo.
 set /p CHOICE=  Select:
 
-if "%CHOICE%"=="1" goto DEV
-if "%CHOICE%"=="2" goto PROD
+if "%CHOICE%"=="1" goto PROD
+if "%CHOICE%"=="2" goto DEV
 if "%CHOICE%"=="3" goto API
 if "%CHOICE%"=="4" goto FRONT
-if "%CHOICE%"=="5" goto STATUS
-if "%CHOICE%"=="6" goto STOP
-if "%CHOICE%"=="7" goto RESTART
-if "%CHOICE%"=="8" goto LOGS
+if "%CHOICE%"=="5" goto NGROK
 if "%CHOICE%"=="0" goto EXIT
 echo Invalid selection.
 pause
 goto MENU
 
-:DEV
+:PROD
 echo.
-echo [DEV] Starting Next.js + API server...
-start "BITDOT API" cmd /k "cd /d "%~dp0" && node server/index.js"
-timeout /t 2 /nobreak > nul
-start "BITDOT Frontend" cmd /k "cd /d "%~dp0" && npm run dev"
-echo Done! API: http://localhost:8000 / Frontend: http://localhost:3000
+echo [1/3] Starting API server...
+start "BITDOT API" cmd /k "cd /d %~dp0 && node server/index.js"
+timeout /t 3 /nobreak > nul
+
+echo [2/3] Starting ngrok tunnel...
+start "BITDOT ngrok" cmd /k "%NGROK% http 8000"
+timeout /t 3 /nobreak > nul
+
+echo [3/3] Starting Next.js production...
+start "BITDOT Frontend" cmd /k "cd /d %~dp0 && npm start"
+
+echo.
+echo Done!
+echo   API:      http://localhost:8000
+echo   ngrok:    http://localhost:4040
+echo   Frontend: http://localhost:3000
 pause
 goto MENU
 
-:PROD
+:DEV
 echo.
-echo [PROD] Starting with PM2...
-where pm2 >nul 2>&1
-if errorlevel 1 (echo PM2 not found. Run: npm install -g pm2 && pause && goto MENU)
-npm run build
-pm2 start ecosystem.config.js
-pm2 status
+echo [1/2] Starting API server...
+start "BITDOT API" cmd /k "cd /d %~dp0 && node server/index.js"
+timeout /t 2 /nobreak > nul
+
+echo [2/2] Starting Next.js dev...
+start "BITDOT Frontend" cmd /k "cd /d %~dp0 && npm run dev"
+
+echo.
+echo Done! API: http://localhost:8000 / Frontend: http://localhost:3000
 pause
 goto MENU
 
 :API
 echo.
-echo [API] Starting API server on port 8000...
-start "BITDOT API" cmd /k "cd /d "%~dp0" && node server/index.js"
+start "BITDOT API" cmd /k "cd /d %~dp0 && node server/index.js"
 echo API server started! http://localhost:8000
 pause
 goto MENU
 
 :FRONT
 echo.
-echo [FRONT] Starting Next.js dev on port 3000...
-start "BITDOT Frontend" cmd /k "cd /d "%~dp0" && npm run dev"
+start "BITDOT Frontend" cmd /k "cd /d %~dp0 && npm start"
 echo Frontend started! http://localhost:3000
 pause
 goto MENU
 
-:STATUS
+:NGROK
 echo.
-where pm2 >nul 2>&1
-if errorlevel 1 (echo PM2 not found. && pause && goto MENU)
-pm2 status
-pause
-goto MENU
-
-:STOP
-echo.
-where pm2 >nul 2>&1
-if errorlevel 1 (echo PM2 not found. && pause && goto MENU)
-pm2 stop all
-pm2 status
-pause
-goto MENU
-
-:RESTART
-echo.
-where pm2 >nul 2>&1
-if errorlevel 1 (echo PM2 not found. && pause && goto MENU)
-pm2 restart all
-pm2 status
-pause
-goto MENU
-
-:LOGS
-echo.
-where pm2 >nul 2>&1
-if errorlevel 1 (echo PM2 not found. && pause && goto MENU)
-pm2 logs
+start "BITDOT ngrok" cmd /k "%NGROK% http 8000"
+echo ngrok started! Dashboard: http://localhost:4040
 pause
 goto MENU
 

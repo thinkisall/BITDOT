@@ -5,8 +5,8 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const HOME_SERVER_URL =
+  process.env.BACKEND_URL ||
   process.env.HOME_SERVER_URL ||
-  process.env.NEXT_PUBLIC_HOME_SERVER_URL ||
   'http://localhost:8000';
 
 export async function GET() {
